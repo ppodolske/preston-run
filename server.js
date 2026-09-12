@@ -54,7 +54,7 @@ const html=`<!doctype html>
 
   <div class="section-title">Sydney today</div>
   <section class="weather">
-    <div><div class="eyebrow">Current conditions</div><h2 id="weatherTitle">Loading…</h2><div class="weather-main"><div class="temp" id="temp">--°</div><div class="condition">Fetching forecast</div></div><div class="weather-note" id="weatherNote">Checking today’s conditions…</div></div>
+    <div><div class="eyebrow">Current conditions</div><h2 id="weatherTitle">Loading…</h2><div class="weather-main"><div class="temp" id="temp">--°</div><div class="condition" id="condition">Fetching forecast</div></div><div class="weather-note" id="weatherNote">Checking today’s conditions…</div></div>
     <div class="weather-stats"><div class="stat"><span>Feels like</span><strong id="feels">--°</strong></div><div class="stat"><span>Rain chance</span><strong id="rain">--%</strong></div><div class="stat"><span>High / Low</span><strong id="range">--° / --°</strong></div><div class="stat"><span>Wind</span><strong id="wind">-- km/h</strong></div></div>
   </section>
 
