@@ -9,6 +9,7 @@ const checks=[
   ['Archive status update', /setStatus\('archive'/],
   ['Archive GitHub admin link', /github\.com\/ppodolske\/archive/],
   ['Archive Railway admin link', /2bc0b4e2-ca87-4b74-94ff-828b9160444a/],
+  ['Existing weather condition hook', /id="condition"/],
   ['v0.4.0 release marker', /VERSION='0\.4\.0'/],
 ];
 
