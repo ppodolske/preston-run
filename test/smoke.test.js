@@ -1,0 +1,14 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const pkg=require('../package.json');
+const {PRODUCT_NAME,VERSION,APPS}=require('../src/branding');
+const {renderLoginPage}=require('../src/pages/login');
+const {renderHomePage}=require('../src/pages/home');
+assert.equal(pkg.version,'0.5.0');assert.equal(VERSION,'0.5.0');assert.equal(PRODUCT_NAME,'preston.ai');
+for(const name of ['Dose & Scale','State Parks','Archive']) assert.ok(APPS.some(a=>a.name===name));
+assert.equal(APPS.find(a=>a.name==='State Parks').url,'https://parks.preston.run');
+const manifest=JSON.parse(fs.readFileSync(path.join(__dirname,'../public/manifest.webmanifest'),'utf8'));assert.equal(manifest.name,'preston.ai');
+assert.ok(!renderLoginPage().includes('railway.com'));
+assert.ok(renderHomePage({user:{}}).includes('id="condition"'));
+console.log('smoke tests passed');

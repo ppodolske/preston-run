@@ -1,0 +1,10 @@
+const assert = require('node:assert/strict');
+const { renderLoginPage } = require('../src/pages/login');
+const { renderHomePage } = require('../src/pages/home');
+const login = renderLoginPage();
+for (const expected of ['preston.ai','/assets/preston-ai-logo.png','/auth/google','/manifest.webmanifest','/icons/favicon-32.png']) assert.ok(login.includes(expected),`login missing ${expected}`);
+for (const forbidden of ['Dose & Scale','State Parks','Archive','Website admin','Railway','id="condition"','birthday','Life Admin']) assert.ok(!login.includes(forbidden), `login leaked ${forbidden}`);
+const home = renderHomePage({user:{email:'owner@example.com',user_metadata:{full_name:'Preston Example'}}});
+for (const expected of ['preston.ai','/assets/preston-ai-logo.png','Good morning','Dose & Scale','State Parks','Archive','Website admin','id="condition"','/auth/logout','v0.5.0','/manifest.webmanifest']) assert.ok(home.includes(expected),`home missing ${expected}`);
+assert.ok(!home.includes('owner@example.com'),'home should not expose owner email');
+console.log('page tests passed');
