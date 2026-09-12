@@ -1,0 +1,10 @@
+const assert = require('node:assert/strict');
+const { loadConfig } = require('../src/config');
+const config = loadConfig({ PORT:'4321', NODE_ENV:'production', SITE_URL:'https://preston.run/', SUPABASE_URL:'https://example.supabase.co', SUPABASE_PUBLISHABLE_KEY:'sb_publishable_test', OWNER_GOOGLE_EMAIL:'OWNER@example.com' });
+assert.equal(config.port, 4321);
+assert.equal(config.siteUrl, 'https://preston.run');
+assert.equal(config.ownerGoogleEmail, 'owner@example.com');
+assert.equal(config.isProduction, true);
+assert.throws(() => loadConfig({}), /SITE_URL|SUPABASE_URL/);
+assert.throws(() => loadConfig({PORT:'0',SITE_URL:'x',SUPABASE_URL:'x',SUPABASE_PUBLISHABLE_KEY:'x',OWNER_GOOGLE_EMAIL:'x'}), /PORT/);
+console.log('config tests passed');
