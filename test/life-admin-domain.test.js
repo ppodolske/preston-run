@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { validateLifeItemInput, validateTaskInput, parseLocalDateInput, isOverdue, getNeedsAttention, getComingUpLifeItems } = require('../src/domain/life-admin');
+const { validateLifeItemInput, validateTaskInput, parseLocalDateInput, isOverdue, getNeedsAttention, getComingUpLifeItems, getAttentionBuckets, excludeAttentionFromComingUp } = require('../src/domain/life-admin');
 
 assert.equal(parseLocalDateInput('2026-09-30'), '2026-09-30T00:00:00.000Z');
 assert.equal(parseLocalDateInput(''), null);
@@ -34,4 +34,30 @@ const coming=getComingUpLifeItems([
 ],now,90);
 assert.deepEqual(coming.map(x=>x.item.id),['today','b','a']);
 assert.equal(coming[0].daysAway,0);
+
+const bucketLifeItems=[
+  {id:'lo-urgent',title:'Urgent overdue',status:'upcoming',priority:'urgent',due_at:'2026-09-11T00:00:00Z'},
+  {id:'lo-high',title:'High overdue',status:'upcoming',priority:'high',due_at:'2026-09-12T00:00:00Z'},
+  {id:'lt-normal',title:'Normal today',status:'needs_action',priority:'normal',due_at:'2026-09-13T00:00:00Z'},
+  {id:'future',title:'Urgent future',status:'upcoming',priority:'urgent',due_at:'2026-09-14T00:00:00Z'},
+  {id:'undated',title:'Needs action undated',status:'needs_action',priority:'urgent',due_at:null},
+  {id:'done',title:'Done today',status:'completed',priority:'urgent',due_at:'2026-09-13T00:00:00Z'}
+];
+const bucketTasks=[
+  {id:'to-high',title:'Task overdue',status:'open',priority:'high',due_at:'2026-09-10T00:00:00Z'},
+  {id:'tt-urgent',title:'Task today urgent',status:'open',priority:'urgent',due_at:'2026-09-13T00:00:00Z'},
+  {id:'tt-low',title:'Task today low',status:'open',priority:'low',due_at:'2026-09-13T00:00:00Z'},
+  {id:'ignored',title:'Ignored today',status:'ignored',priority:'urgent',due_at:'2026-09-13T00:00:00Z'}
+];
+const buckets=getAttentionBuckets({lifeItems:bucketLifeItems,tasks:bucketTasks,now:new Date('2026-09-13T10:00:00Z')});
+assert.deepEqual(buckets.overdue.map(x=>`${x.type}:${x.record.id}`),['life_item:lo-urgent','life_item:lo-high','task:to-high']);
+assert.deepEqual(buckets.today.map(x=>`${x.type}:${x.record.id}`),['task:tt-urgent','life_item:lt-normal','task:tt-low']);
+assert.equal(buckets.overdue.some(x=>buckets.today.some(y=>x.type===y.type&&x.record.id===y.record.id)),false,'attention buckets must not overlap');
+assert.equal(buckets.overdue.some(x=>x.record.id==='future'),false,'future urgent item is not overdue');
+assert.equal(buckets.today.some(x=>x.record.id==='undated'),false,'undated needs-action item is not due today');
+
+const bucketComing=getComingUpLifeItems(bucketLifeItems,now,90);
+const dedupedComing=excludeAttentionFromComingUp(bucketComing,buckets);
+assert.equal(dedupedComing.some(x=>x.item.id==='lt-normal'),false,'today life item must not duplicate in Coming Up');
+assert.equal(dedupedComing.some(x=>x.item.id==='future'),true,'future item remains in Coming Up');
 console.log('Life Admin domain tests passed');
