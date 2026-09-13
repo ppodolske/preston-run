@@ -5,7 +5,7 @@ function offsets(value){return Array.isArray(value)?value.join(', '):'';}
 function time(value,fallback){const s=String(value||fallback||'');return s.slice(0,5);}
 function dateTime(value){if(!value)return'—';try{return new Intl.DateTimeFormat('en-AU',{timeZone:'Australia/Sydney',day:'numeric',month:'short',hour:'numeric',minute:'2-digit'}).format(new Date(value));}catch{return'—';}}
 
-function settingRow(label,name,value){return `<label><span>${escapeHtml(label)}</span><input name="${escapeHtml(name)}" value="${escapeHtml(offsets(value).replace(/, /g,','))}" inputmode="numeric" autocomplete="off"><small>Days before, comma-separated</small></label>`;}
+function settingRow(label,name,value){return `<label><span>${escapeHtml(label)}</span><input name="${escapeHtml(name)}" value="${escapeHtml(offsets(value))}" inputmode="numeric" autocomplete="off"><small>Days before, comma-separated</small></label>`;}
 
 function renderSubscriptions(rows=[]){
   if(!rows.length)return '<p class="muted">No devices enrolled yet.</p>';
