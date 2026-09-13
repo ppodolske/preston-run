@@ -1,15 +1,19 @@
 {
   "name": "preston-run",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "private": true,
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node test.js"
+    "test": "node test.js",
+    "job:reminders:morning": "node src/jobs/reminders.js morning",
+    "job:reminders:noon": "node src/jobs/reminders.js noon",
+    "job:reminders:evening": "node src/jobs/reminders.js evening"
   },
   "dependencies": {
     "@supabase/ssr": "0.10.3",
-    "@supabase/supabase-js": "2.109.0"
+    "@supabase/supabase-js": "2.109.0",
+    "web-push": "3.6.7"
   },
   "engines": {
     "node": ">=22"

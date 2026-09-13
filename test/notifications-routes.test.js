@@ -1,0 +1,22 @@
+const assert=require('node:assert/strict');
+const {Readable}=require('node:stream');
+const {handleNotificationsRoute}=require('../src/routes/notifications');
+
+function res(){return{status:null,headers:{},body:'',writeHead(s,h={}){this.status=s;this.headers={...this.headers,...h};},end(b=''){this.body+=b||'';}};}
+function req(method,url,body='',type='application/x-www-form-urlencoded'){const r=Readable.from([Buffer.from(body)]);r.method=method;r.url=url;r.headers=method==='POST'?{'content-type':type,origin:'https://preston.run'}:{};return r;}
+function store(owner=true){
+ const db={reminder_settings:[],push_subscriptions:[],notification_deliveries:[],reminders:[{id:'r1',user_id:'u1',status:'pending',effective_trigger_at:'2026-09-20T00:00:00Z',policy_source:'default'}],reminder_overrides:[]};
+ function builder(table){let mode='select',payload=null,filters=[],gtFilter=null,order=null;const b={select(){return b;},order(k,o){order=[k,o];return b;},insert(v){mode='insert';payload=v;return b;},upsert(v){mode='upsert';payload=v;return b;},update(v){mode='update';payload=v;return b;},delete(){mode='delete';return b;},eq(k,v){filters.push([k,v]);return b;},gt(k,v){gtFilter=[k,v];return b;},lte(){return b;},maybeSingle(){let row=db[table].find(x=>filters.every(([k,v])=>x[k]===v))||null;if(mode==='update'&&row)Object.assign(row,payload);if(mode==='delete'&&row)db[table].splice(db[table].indexOf(row),1);return Promise.resolve({data:row,error:null});},single(){if(mode==='insert'){const row={id:`new-${table}`,...payload};db[table].push(row);return Promise.resolve({data:row,error:null});}if(mode==='upsert'){let row=db[table].find(x=>x.user_id===payload.user_id&&(table!=='push_subscriptions'||x.endpoint===payload.endpoint));if(row)Object.assign(row,payload);else{row={id:`new-${table}`,...payload};db[table].push(row);}return Promise.resolve({data:row,error:null});}return b.maybeSingle();},then(resolve,reject){let rows=db[table].filter(x=>filters.every(([k,v])=>x[k]===v));if(gtFilter)rows=rows.filter(x=>x[gtFilter[0]]>gtFilter[1]);if(mode==='update'){rows.forEach(x=>Object.assign(x,payload));}if(order)rows=rows.slice();return Promise.resolve({data:rows,error:null}).then(resolve,reject);}};return b;}
+ return{db,auth:{getUser:async()=>owner?{data:{user:{id:'u1',email:'owner@example.com'}},error:null}:{data:{user:null},error:null},signOut:async()=>{}},from:t=>builder(t)};
+}
+const config={siteUrl:'https://preston.run',ownerGoogleEmail:'owner@example.com',vapidPublicKey:'PUBLIC'};
+(async()=>{
+ let s=store(false),r=res();await handleNotificationsRoute(req('GET','/notifications'),r,{supabase:s,config});assert.equal(r.status,302);assert.equal(r.headers.location,'/');
+ s=store(true);r=res();await handleNotificationsRoute(req('GET','/notifications'),r,{supabase:s,config});assert.equal(r.status,200);assert.equal(r.headers['cache-control'],'private, no-store');assert.match(r.body,/Enable notifications/);
+ r=res();const bad=req('POST','/notifications/settings','birthday_offsets=30%2C7');bad.headers.origin='https://evil.example';await handleNotificationsRoute(bad,r,{supabase:s,config});assert.equal(r.status,403);
+ r=res();await handleNotificationsRoute(req('POST','/notifications/settings','birthday_offsets=45%2C14%2C1&renewal_offsets=60%2C30%2C7&deadline_offsets=14%2C3%2C0&appointment_offsets=7%2C1%2C0&trip_offsets=14%2C7%2C1'),r,{supabase:s,config});assert.equal(r.status,302);assert.equal(s.db.reminder_settings[0].user_id,'u1');assert.deepEqual(s.db.reminder_settings[0].birthday_offsets,[45,14,1]);
+ r=res();const payload=JSON.stringify({endpoint:'https://push.example/x',keys:{p256dh:'p',auth:'a'},device_label:'iPhone'});await handleNotificationsRoute(req('POST','/notifications/subscriptions',payload,'application/json'),r,{supabase:s,config});assert.equal(r.status,201);assert.equal(s.db.push_subscriptions[0].user_id,'u1');assert.equal(s.db.push_subscriptions[0].device_label,'iPhone');
+ r=res();await handleNotificationsRoute(req('POST',`/notifications/subscriptions/${s.db.push_subscriptions[0].id}/toggle`,'active=false'),r,{supabase:s,config});assert.equal(r.status,302);assert.equal(s.db.push_subscriptions[0].active,false);
+ r=res();await handleNotificationsRoute(req('POST','/notifications/reminders/r1/acknowledge',''),r,{supabase:s,config});assert.equal(r.status,302);assert.equal(s.db.reminders[0].status,'acknowledged');
+ console.log('notifications route tests passed');
+})().catch(e=>{console.error(e);process.exit(1)});

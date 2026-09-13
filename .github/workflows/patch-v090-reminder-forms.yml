@@ -1,0 +1,43 @@
+name: Patch v0.9 reminder forms
+on:
+  push:
+    branches: [build/preston-ai-v0.9.0]
+    paths: ['.github/workflows/patch-v090-reminder-forms.yml']
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Patch reminder form wiring
+        run: |
+          node <<'NODE'
+          const fs=require('fs');
+          function patch(file,replacements){let s=fs.readFileSync(file,'utf8');for(const [from,to] of replacements){if(!s.includes(from))throw new Error(`Missing anchor in ${file}: ${from.slice(0,90)}`);s=s.replace(from,to);}fs.writeFileSync(file,s);}
+          patch('src/pages/people.js',[["renderReminderControls({reminderClass:'birthday',settings:reminderSettings,override:reminderOverride,edit:isEdit})","renderReminderControls({reminderClass:'birthday',settings:reminderSettings,override:reminderOverride,edit:isEdit,entityType:'person',entityId:person.id})"]]);
+          patch('src/pages/life-admin.js',[["renderReminderControls({reminderClass:reminderClassForLifeItem(item),settings:reminderSettings,override:reminderOverride,edit})","renderReminderControls({reminderClass:reminderClassForLifeItem(item),settings:reminderSettings,override:reminderOverride,edit,entityType:'life_item',entityId:item.id})"]]);
+          patch('src/pages/trips.js',[["renderReminderControls({reminderClass:'trip',settings:reminderSettings,override:reminderOverride,edit})","renderReminderControls({reminderClass:'trip',settings:reminderSettings,override:reminderOverride,edit,entityType:'trip',entityId:trip.id})"]]);
+          patch('src/routes/people.js',[
+            ["const { renderPeoplePage, renderPersonFormPage } = require('../pages/people');","const { renderPeoplePage, renderPersonFormPage } = require('../pages/people');\nconst { getReminderSettings, getReminderOverride } = require('../data/reminders');"],
+            ["html(res, 200, renderPersonFormPage({person, mode:'edit'}), {'cache-control':'private, no-store'});","const [reminderSettings,reminderOverride]=await Promise.all([getReminderSettings(supabase,user.id).catch(()=>null),getReminderOverride(supabase,user.id,'person',person.id).catch(()=>null)]);\n    html(res, 200, renderPersonFormPage({person, mode:'edit', reminderSettings:reminderSettings||{}, reminderOverride}), {'cache-control':'private, no-store'});"]
+          ]);
+          patch('src/routes/life-admin.js',[
+            ["const {renderLifeAdminPage,renderLifeItemPage,renderLifeItemFormPage,renderTaskFormPage}=require('../pages/life-admin');","const {renderLifeAdminPage,renderLifeItemPage,renderLifeItemFormPage,renderTaskFormPage}=require('../pages/life-admin');\nconst {getReminderSettings,getReminderOverride}=require('../data/reminders');"],
+            ["privateHtml(res,200,renderLifeItemFormPage({item,people:await listPeople(supabase),mode:'edit'}));","const [reminderSettings,reminderOverride,people]=await Promise.all([getReminderSettings(supabase,user.id).catch(()=>null),getReminderOverride(supabase,user.id,'life_item',item.id).catch(()=>null),listPeople(supabase)]);privateHtml(res,200,renderLifeItemFormPage({item,people,mode:'edit',reminderSettings:reminderSettings||{},reminderOverride}));"]
+          ]);
+          patch('src/routes/trips.js',[
+            ["const {renderTripsPage,renderTripDetailPage,renderTripFormPage,renderSegmentFormPage,renderBookingFormPage}=require('../pages/trips');","const {renderTripsPage,renderTripDetailPage,renderTripFormPage,renderSegmentFormPage,renderBookingFormPage}=require('../pages/trips');\nconst {getReminderSettings,getReminderOverride}=require('../data/reminders');"],
+            ["privateHtml(res,200,renderTripFormPage({trip,mode:'edit'}));","const [reminderSettings,reminderOverride]=await Promise.all([getReminderSettings(supabase,user.id).catch(()=>null),getReminderOverride(supabase,user.id,'trip',trip.id).catch(()=>null)]);privateHtml(res,200,renderTripFormPage({trip,mode:'edit',reminderSettings:reminderSettings||{},reminderOverride}));"]
+          ]);
+          NODE
+      - name: Commit patch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/pages/people.js src/pages/life-admin.js src/pages/trips.js src/routes/people.js src/routes/life-admin.js src/routes/trips.js
+          git commit -m 'feat: wire saved per-item reminder settings'
+          git push origin HEAD:build/preston-ai-v0.9.0

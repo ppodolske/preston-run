@@ -17,8 +17,9 @@ assert.ok(!detail.includes('owner@example.com'));
 const empty=renderTripDetailPage({trip:trips[0],segments:[],bookings:[],itinerary:[],tasks:[]});
 for(const x of ['No itinerary entries yet.','No segments yet.','No bookings yet.','No tasks linked to this trip.']) assert.ok(empty.includes(x),`empty state missing ${x}`);
 
-const tripForm=renderTripFormPage({trip:{id:'t1',title:'Chicago',status:'planning',start_date:'2026-10-01',end_date:'2026-10-10',notes:'x'},mode:'edit'});
-for(const x of ['Edit trip','name="title"','name="status"','name="start_date"','name="end_date"','/trips/t1']) assert.ok(tripForm.includes(x),`trip form missing ${x}`);
+const tripForm=renderTripFormPage({trip:{id:'t1',title:'Chicago',status:'planning',start_date:'2026-10-01',end_date:'2026-10-10',notes:'x'},mode:'edit',reminderSettings:{trip_offsets:[14,7,1]},reminderOverride:null});
+for(const x of ['Edit trip','name="title"','name="status"','name="start_date"','name="end_date"','/trips/t1','Use global defaults','Custom reminders','14, 7, 1']) assert.ok(tripForm.includes(x),`trip form missing ${x}`);
+const customTrip=renderTripFormPage({trip:{id:'t1',title:'Chicago',status:'planning'},mode:'edit',reminderSettings:{trip_offsets:[14,7,1]},reminderOverride:{enabled:true,offsets:[30,2]}});assert.match(customTrip,/30, 2/);assert.match(customTrip,/Restore defaults/);
 
 const segmentForm=renderSegmentFormPage({trip:trips[0],segment:{id:'s1',title:'Flight',position:1,segment_type:'travel',origin:'Sydney',destination:'Chicago',starts_at:'2026-10-01T00:00:00.000Z',ends_at:'2026-10-01T01:00:00.000Z',time_zone:'Australia/Sydney'},mode:'edit'});
 for(const x of ['Edit segment','2026-10-01T10:00','2026-10-01T11:00','Australia/Sydney','name="time_zone"','/segments/s1']) assert.ok(segmentForm.includes(x),`segment form missing ${x}`);
