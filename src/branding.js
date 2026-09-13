@@ -1,9 +1,9 @@
 const PRODUCT_NAME = 'preston.ai';
 const VERSION = '0.10.0';
 const APPS = [
-  { key:'dose', name:'Dose & Scale', url:'https://dose.preston.run' },
-  { key:'parks', name:'State Parks', url:'https://parks.preston.run' },
-  { key:'archive', name:'Archive', url:'https://archive.preston.run' }
+  { key:'dose', name:'Dose & Scale', url:'https://dose.preston.run', icon:'https://dose.preston.run/logo.png' },
+  { key:'parks', name:'State Parks', url:'https://parks.preston.run', icon:'https://parks.preston.run/favicon.ico' },
+  { key:'archive', name:'Archive', url:'https://archive.preston.run', icon:'https://archive.preston.run/favicon.ico' }
 ];
 const ADMIN = [
   {name:'preston.ai',domain:'preston.run',site:'https://preston.run',repo:'https://github.com/ppodolske/preston-run',railway:'https://railway.com/project/52e3a022-86d8-4191-bf3b-e4250d484055'},
