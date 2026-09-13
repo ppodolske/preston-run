@@ -1,5 +1,5 @@
 const PRODUCT_NAME = 'preston.ai';
-const VERSION = '0.11.0';
+const VERSION = '0.12.0';
 const APPS = [
   { key:'dose', name:'Dose & Scale', url:'https://dose.preston.run', icon:'https://dose.preston.run/logo.png' },
   { key:'parks', name:'State Parks', url:'https://parks.preston.run', icon:'https://parks.preston.run/park-favicon.svg' },
