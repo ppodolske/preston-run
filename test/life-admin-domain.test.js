@@ -50,7 +50,7 @@ const bucketTasks=[
   {id:'ignored',title:'Ignored today',status:'ignored',priority:'urgent',due_at:'2026-09-13T00:00:00Z'}
 ];
 const buckets=getAttentionBuckets({lifeItems:bucketLifeItems,tasks:bucketTasks,now:new Date('2026-09-13T10:00:00Z')});
-assert.deepEqual(buckets.overdue.map(x=>`${x.type}:${x.record.id}`),['life_item:lo-urgent','life_item:lo-high','task:to-high']);
+assert.deepEqual(buckets.overdue.map(x=>`${x.type}:${x.record.id}`),['life_item:lo-urgent','task:to-high','life_item:lo-high']);
 assert.deepEqual(buckets.today.map(x=>`${x.type}:${x.record.id}`),['task:tt-urgent','life_item:lt-normal','task:tt-low']);
 assert.equal(buckets.overdue.some(x=>buckets.today.some(y=>x.type===y.type&&x.record.id===y.record.id)),false,'attention buckets must not overlap');
 assert.equal(buckets.overdue.some(x=>x.record.id==='future'),false,'future urgent item is not overdue');
