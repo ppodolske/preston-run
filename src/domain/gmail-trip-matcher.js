@@ -5,6 +5,7 @@ function rankTripMatch(facts,existingTrips=[]){
     const tripRefs=(trip.bookingReferences||[]).map(v=>String(v).toUpperCase());
     if(refs.some(ref=>tripRefs.includes(ref)))return {kind:'automatic',tripId:trip.id,score:0.99,reasons:['exact_booking_reference']};
   }
+  if(refs.length)return {kind:'none',tripId:null,score:0.9,reasons:['new_booking_reference']};
   return {kind:facts.length?'review':'none',tripId:null,score:facts.length?0.45:0,reasons:facts.length?['weak_trip_evidence']:[]};
 }
 module.exports={rankTripMatch};
