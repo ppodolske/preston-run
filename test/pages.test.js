@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const { renderLoginPage } = require('../src/pages/login');
-const { renderHomePage } = require('../src/pages/home');
+const { renderHomePage } = require('../src/pages/home-page');
 const login = renderLoginPage();
 for (const expected of ['preston.ai','/assets/preston-ai-logo.png','/auth/google','/manifest.webmanifest','/icons/favicon-32.png']) assert.ok(login.includes(expected),`login missing ${expected}`);
 for (const forbidden of ['Dose & Scale','State Parks','Archive','Website admin','Railway','id="condition"','birthday','Life Admin','Coming Up','Needs Attention','Manage people','Trips','/trips','Notifications','Reminder','Device label','Enable notifications on this device','/notifications','subscription','Calendars','/settings/calendars','Google Calendar','Apple / iCloud Calendar','VAPID_PRIVATE_KEY','SUPABASE_SERVICE_ROLE_KEY']) assert.ok(!login.includes(forbidden), `login leaked ${forbidden}`);
