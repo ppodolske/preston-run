@@ -18,7 +18,14 @@ const config={siteUrl:'https://preston.run',ownerGoogleEmail:'owner@example.com'
   signedOut=false;res=fakeRes();await handleAuthRoute({method:'GET',url:'/auth/callback?code=abc'},res,{supabase,config});assert.ok(signedOut);assert.equal(res.headers.location,'/auth/denied');
   supabase={auth:{signOut:async()=>{signedOut=true;}}};signedOut=false;res=fakeRes();await handleAuthRoute({method:'POST',url:'/auth/logout'},res,{supabase,config});assert.ok(signedOut);assert.equal(res.headers.location,'/');
   supabase={auth:{getUser:async()=>({data:{user:null},error:null}),signOut:async()=>{}}};res=fakeRes();await handleSiteRoute({method:'GET',url:'/'},res,{supabase,config});assert.equal(res.status,200);assert.ok(res.body.includes('Sign in with Google'));assert.ok(!res.body.includes('Website admin'));
-  supabase={auth:{getUser:async()=>({data:{user:{email:'owner@example.com',user_metadata:{name:'Preston'}}},error:null}),signOut:async()=>{}}};res=fakeRes();await handleSiteRoute({method:'GET',url:'/'},res,{supabase,config});assert.equal(res.status,200);assert.ok(res.body.includes('Website admin'));assert.equal(res.headers['cache-control'],'private, no-store');
+
+  supabase={auth:{getUser:async()=>({data:{user:{id:'u1',email:'owner@example.com',user_metadata:{name:'Preston'}}},error:null}),signOut:async()=>{}}};
+  const baseSiteDeps={listPeople:async()=>[],listLifeItems:async()=>[],listTasks:async()=>[],listTrips:async()=>[],getUpcomingBirthdays:()=>[],getComingUpLifeItems:()=>[],getAttentionBuckets:()=>({overdue:[],today:[]}),excludeAttentionFromComingUp:rows=>rows,getUpcomingTrips:()=>[]};
+  const siteDeps={...baseSiteDeps,listCalendarDashboardData:async()=>({sources:[{id:'s1',display_name:'Home',selected:true}],events:[{id:'e1',calendar_source_id:'s1',title:'Breakfast',all_day:false,starts_at:'2026-09-13T00:00:00Z',ends_at:'2026-09-13T01:00:00Z',status:'confirmed',owner_response:'accepted'}]}),buildDashboardCalendar:()=>({personal:[{id:'e1',title:'Breakfast',allDay:false,startsAt:'2026-09-13T00:00:00Z',day:'today'}],holidays:[],reminders:[]})};
+  res=fakeRes();await handleSiteRoute({method:'GET',url:'/'},res,{supabase,config,siteDeps});assert.equal(res.status,200);assert.ok(res.body.includes('Website admin'));assert.ok(res.body.includes('Breakfast'));assert.equal(res.headers['cache-control'],'private, no-store');
+  const failingSiteDeps={...siteDeps,listCalendarDashboardData:async()=>{throw new Error('calendar down');}};
+  res=fakeRes();await handleSiteRoute({method:'GET',url:'/'},res,{supabase,config,siteDeps:failingSiteDeps});assert.equal(res.status,200);assert.ok(res.body.includes('Calendar data is temporarily unavailable.'));assert.ok(res.body.includes('Birthdays'));assert.ok(res.body.includes('Trips'));
+
   const originalLoad=Module._load;
   Module._load=function(request,parent,isMain){if(request==='@supabase/ssr') return {createServerClient:()=>({})};return originalLoad.call(this,request,parent,isMain);};
   delete require.cache[require.resolve('../src/auth/supabase')]; delete require.cache[require.resolve('../src/app')];
