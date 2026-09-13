@@ -28,8 +28,12 @@ const events=[
   {id:'declined',calendar_source_id:'personal',title:'Declined',all_day:false,starts_at:'2026-09-11T00:00:00Z',ends_at:'2026-09-11T01:00:00Z',status:'confirmed',owner_response:'declined'},
   {id:'off-event',calendar_source_id:'off',title:'Hidden source',all_day:true,start_date:'2026-09-12',end_date:'2026-09-13',status:'confirmed',owner_response:'accepted'}
 ];
+const plannedWorkouts=[
+  {id:'pw-sep',date:'2026-09-13',name:'Workout A',sport:'strength',durationMinutes:45,description:'Full body strength'},
+  {id:'pw-oct',date:'2026-10-02',name:'Easy Run',sport:'running',durationMinutes:35,distanceKm:5}
+];
 
-const month=buildCalendarMonth({events,sources,monthKey:'2026-09',now:new Date('2026-09-12T22:00:00Z')});
+const month=buildCalendarMonth({events,sources,plannedWorkouts,monthKey:'2026-09',now:new Date('2026-09-12T22:00:00Z')});
 assert.equal(month.monthKey,'2026-09');
 assert.equal(month.days['2026-09-15'].some(x=>x.id==='timed'),true,'timed event appears on Sydney-local start date');
 assert.equal(month.days['2026-09-01'].some(x=>x.id==='timed-span-start'),true,'timed event overlapping month start appears on first visible day');
@@ -40,6 +44,7 @@ const allItems=Object.values(month.days).flat();
 assert.equal(allItems.some(x=>x.id==='cancelled'),false);
 assert.equal(allItems.some(x=>x.id==='declined'),false);
 assert.equal(allItems.some(x=>x.id==='off-event'),false);
+assert.equal(allItems.some(x=>x.id==='pw-oct'),false,'October planned workout stays out of September model');
 const timed=allItems.find(x=>x.id==='timed');
 assert.equal(timed.sourceName,'Home');
 assert.equal(timed.sourceColor,'#123456');
@@ -47,5 +52,15 @@ assert.equal(timed.externalUrl,'https://calendar.example/timed');
 assert.equal(timed.location,'Sydney');
 assert.equal(Object.prototype.hasOwnProperty.call(timed,'provider_calendar_id'),false);
 assert.equal(Object.prototype.hasOwnProperty.call(timed,'providerCalendarId'),false);
+const workout=month.days['2026-09-13'].find(x=>x.id==='pw-sep');
+assert.ok(workout,'September planned workout appears on its local date');
+assert.equal(workout.title,'Workout A');
+assert.equal(workout.sourceName,'Planned Workout');
+assert.equal(workout.externalUrl,null);
+assert.equal(workout.allDay,true);
+assert.equal(workout.startDate,'2026-09-13');
+assert.equal(workout.sourceType,'planned_workout');
+assert.equal(Object.prototype.hasOwnProperty.call(workout,'provider_calendar_id'),false);
+assert.equal(Object.prototype.hasOwnProperty.call(workout,'providerCalendarId'),false);
 
 console.log('calendar view tests passed');
