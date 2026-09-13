@@ -25,6 +25,11 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm test
       - run: node --check server.js
+      - run: node --check src/data/fitness-context.js
+      - run: node --check src/services/dose-scale-client.js
+      - run: node --check src/services/fitness-context.js
+      - run: node --check src/domain/morning-digest.js
+      - run: node --check src/jobs/fitness-context-sync.js
       - run: node --check src/pages/home.js
       - run: node --check src/pages/calendar-view.js
       - run: node --check src/routes/site.js
