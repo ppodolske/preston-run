@@ -16,4 +16,10 @@ assert.match(sql, /using \(\(select auth\.uid\(\)\) = user_id\)/i);
 assert.match(sql, /with check \(\(select auth\.uid\(\)\) = user_id\)/i);
 assert.match(sql, /birthday_month between 1 and 12/i);
 assert.match(sql, /birthday_day between 1 and 31/i);
+
+const restrictFile = files.find(name => name.endsWith('_v060_restrict_people_privileges.sql'));
+assert.ok(restrictFile, 'v0.6.0 privilege restriction migration is required');
+const restrictSql = fs.readFileSync(path.join(dir, restrictFile), 'utf8');
+assert.match(restrictSql, /revoke all on public\.profiles, public\.people from authenticated/i);
+assert.match(restrictSql, /grant select, insert, update, delete on public\.profiles, public\.people to authenticated/i);
 console.log('migration tests passed');
