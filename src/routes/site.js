@@ -7,14 +7,15 @@ const { listLifeItems } = require('../data/life-admin');
 const { listTasks } = require('../data/tasks');
 const { listTrips } = require('../data/trips');
 const { listCalendarDashboardData } = require('../data/calendars');
+const { getFitnessContext, getMorningDigest } = require('../data/fitness-context');
 const { getUpcomingBirthdays, todayInTimeZone } = require('../domain/birthdays');
 const { getComingUpLifeItems, getAttentionBuckets, excludeAttentionFromComingUp } = require('../domain/life-admin');
-const { buildDashboardCalendar } = require('../domain/calendars');
+const { buildDashboardCalendar, getDashboardCalendarWindow } = require('../domain/calendars');
 const { getUpcomingTrips } = require('../domain/trips');
 const { refreshFitnessContext } = require('../services/fitness-context');
 const { APPS, VERSION } = require('../branding');
 
-function depsFor(context={}){return{listPeople,listLifeItems,listTasks,listTrips,listCalendarDashboardData,getUpcomingBirthdays,getComingUpLifeItems,getAttentionBuckets,excludeAttentionFromComingUp,buildDashboardCalendar,getUpcomingTrips,refreshFitnessContext,...(context.siteDeps||{})};}
+function depsFor(context={}){return{listPeople,listLifeItems,listTasks,listTrips,listCalendarDashboardData,getFitnessContext,getMorningDigest,getUpcomingBirthdays,getComingUpLifeItems,getAttentionBuckets,excludeAttentionFromComingUp,buildDashboardCalendar,getUpcomingTrips,refreshFitnessContext,renderHomePage,...(context.siteDeps||{})};}
 
 async function probe(url) {
   const started = Date.now();
@@ -64,30 +65,47 @@ async function handleSiteRoute(req, res, context) {
   if (req.method === 'GET' && url.pathname === '/') {
     const auth = await getAuthorizedOwner(supabase, config);
     if (auth.user) {
+      const now=new Date();
       let upcomingBirthdays = [], birthdayDataUnavailable = false;
       let upcomingLifeItems = [], overdueItems = [], todayItems = [], lifeAdminDataUnavailable = false;
       let upcomingTrips = [], tripDataUnavailable = false;
-      let calendar = {personal:[],holidays:[],reminders:[]}, calendarDataUnavailable = false;
+      let providerCalendarData={events:[],sources:[]}, calendarDataUnavailable = false;
+      let fitnessContext=null, morningDigest=null, fitnessUnavailable=false;
       try {
         const people = await deps.listPeople(supabase);
         upcomingBirthdays = deps.getUpcomingBirthdays(people, todayInTimeZone('Australia/Sydney'), 90);
       } catch { birthdayDataUnavailable = true; }
       try {
         const [lifeItems, tasks] = await Promise.all([deps.listLifeItems(supabase), deps.listTasks(supabase)]);
-        const now = new Date();
         const buckets=deps.getAttentionBuckets({lifeItems,tasks,now});
         overdueItems=buckets.overdue;todayItems=buckets.today;
         upcomingLifeItems = deps.excludeAttentionFromComingUp(deps.getComingUpLifeItems(lifeItems, now, 90),buckets);
       } catch { lifeAdminDataUnavailable = true; }
       try {
-        const data=await deps.listCalendarDashboardData(supabase,auth.user.id);
-        calendar=deps.buildDashboardCalendar({...data,now:new Date()});
+        providerCalendarData=await deps.listCalendarDashboardData(supabase,auth.user.id);
+      } catch { calendarDataUnavailable = true; }
+      try {
+        fitnessContext=await deps.getFitnessContext(supabase,auth.user.id);
+      } catch { fitnessUnavailable = true; }
+      try {
+        const today=getDashboardCalendarWindow(now).today;
+        morningDigest=await deps.getMorningDigest(supabase,auth.user.id,today);
+      } catch { fitnessUnavailable = true; }
+      const fitnessPayload=fitnessContext&&fitnessContext.payload&&typeof fitnessContext.payload==='object'?fitnessContext.payload:{};
+      let calendar={personal:[],holidays:[],reminders:[],plannedWorkouts:[]};
+      try {
+        calendar=deps.buildDashboardCalendar({
+          ...providerCalendarData,
+          plannedWorkouts:Array.isArray(fitnessPayload.plannedWorkouts)?fitnessPayload.plannedWorkouts:[],
+          actualActivities:Array.isArray(fitnessPayload.actualActivities)?fitnessPayload.actualActivities:[],
+          now
+        });
       } catch { calendarDataUnavailable = true; }
       try {
         const trips = await deps.listTrips(supabase, auth.user);
-        upcomingTrips = deps.getUpcomingTrips(trips, new Date(), 180);
+        upcomingTrips = deps.getUpcomingTrips(trips, now, 180);
       } catch { tripDataUnavailable = true; }
-      html(res, 200, renderHomePage({ user:auth.user, upcomingBirthdays, birthdayDataUnavailable, upcomingLifeItems, overdueItems, todayItems, lifeAdminDataUnavailable, calendar, calendarDataUnavailable, upcomingTrips, tripDataUnavailable }), { 'cache-control':'private, no-store' });
+      html(res, 200, deps.renderHomePage({ user:auth.user, upcomingBirthdays, birthdayDataUnavailable, upcomingLifeItems, overdueItems, todayItems, lifeAdminDataUnavailable, calendar, calendarDataUnavailable, morningDigest, fitnessContext, fitnessUnavailable, upcomingTrips, tripDataUnavailable }), { 'cache-control':'private, no-store' });
       return true;
     }
     if (auth.reason === 'not_owner') {
