@@ -7,6 +7,8 @@ function scanProgressPatch(input={}){
     processedCount:'processed_count',
     ignoredCount:'ignored_count',
     relevantCount:'relevant_count',
+    tripCount:'trip_count',
+    lifeAdminCount:'life_admin_count',
     factsCreatedCount:'facts_created_count',
     recordsCreatedCount:'records_created_count',
     recordsUpdatedCount:'records_updated_count',
