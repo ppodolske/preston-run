@@ -21,7 +21,8 @@ function redirectCookie(res,location,cookie){res.writeHead(302,{location,'cache-
 function privateHtml(res,body){html(res,200,body,{'cache-control':'private, no-store'});}
 function normalizedSources(rows=[]){return rows.map(row=>({provider_calendar_id:String(row.id||row.href||''),display_name:String(row.name||row.id||row.href||'Calendar'),color:row.color||null,read_only:row.readOnly!==false})).filter(row=>row.provider_calendar_id);}
 function keyFor(config,deps){return deps.encryptCredential?config.calendarCredentialKey:decodeCredentialKey(config.calendarCredentialKey);}
-function defaultDeps(){return{...data,googleProvider,appleProvider,encryptCredential,syncCalendars};}
+function reportCalendarError(provider,stage){console.error(`Calendar callback failed: provider=${provider} stage=${stage}`);}
+function defaultDeps(){return{...data,googleProvider,appleProvider,encryptCredential,syncCalendars,reportCalendarError};}
 function mergeDeps(context){return{...defaultDeps(),...(context.calendarDeps||{})};}
 function validOAuthState(expected,received){
   if(!expected||!received||expected.length<32)return false;
@@ -55,16 +56,22 @@ async function handleCalendarsRoute(req,res,context){
   if(req.method==='GET'&&url.pathname==='/settings/calendars/google/callback'){
     const expected=cookieValue(req,STATE_COOKIE),received=url.searchParams.get('state'),code=url.searchParams.get('code');
     if(!code||!validOAuthState(expected,received)){text(res,400,'Invalid calendar authorization state',{'cache-control':'no-store'});return true;}
+    let stage='token_exchange';
     try{
       const tokens=await deps.googleProvider.exchangeAuthorizationCode({code,clientId:config.googleCalendarClientId,clientSecret:config.googleCalendarClientSecret,redirectUri});
       if(!tokens.refreshToken)throw new Error('Google Calendar authorization did not return a refresh token');
+      stage='calendar_discovery';
       const calendars=await deps.googleProvider.listCalendars({accessToken:tokens.accessToken});
+      stage='account_identity';
       const identity=deps.googleProvider.getAccountIdentity(calendars);
+      stage='credential_encryption';
       const ciphertext=deps.encryptCredential({refreshToken:tokens.refreshToken},keyFor(config,deps));
+      stage='connection_save';
       const connection=await deps.upsertCalendarConnection(supabase,user.id,{provider:'google',account_external_id:identity.externalId,account_label:identity.label,credential_ciphertext:ciphertext,status:'connected',last_error:null});
+      stage='source_save';
       await deps.replaceDiscoveredCalendarSources(supabase,user.id,connection.id,normalizedSources(calendars));
       redirectCookie(res,'/settings/calendars?connected=google',stateCookie('',config,{clear:true}));
-    }catch(_error){redirectCookie(res,'/settings/calendars?error=google',stateCookie('',config,{clear:true}));}
+    }catch(_error){deps.reportCalendarError('google',stage,_error);redirectCookie(res,'/settings/calendars?error=google',stateCookie('',config,{clear:true}));}
     return true;
   }
 
