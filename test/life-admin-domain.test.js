@@ -13,6 +13,7 @@ assert.equal(item.title,'Licence renewal');assert.equal(item.due_at,'2026-10-01T
 const task=validateTaskInput({title:'Renew licence',status:'open',due_at:'2026-09-10',priority:'urgent'});assert.equal(task.priority,'urgent');
 const now=new Date('2026-09-13T00:00:00Z');
 assert.equal(isOverdue({status:'upcoming',due_at:'2026-09-12T00:00:00Z'},now),true);
+assert.equal(isOverdue({status:'upcoming',due_at:'2026-09-13T00:00:00Z'},new Date('2026-09-13T10:00:00Z')),false);
 assert.equal(isOverdue({status:'completed',due_at:'2026-09-12T00:00:00Z'},now),false);
 const attention=getNeedsAttention({lifeItems:[
   {id:'l1',title:'Needs action',status:'needs_action',priority:'normal',due_at:null},
@@ -24,10 +25,12 @@ const attention=getNeedsAttention({lifeItems:[
 ],now});
 assert.deepEqual(attention.map(x=>x.record.id),['t1','l2','l1']);
 const coming=getComingUpLifeItems([
+  {id:'today',title:'Today',status:'upcoming',priority:'normal',due_at:'2026-09-13T00:00:00Z'},
   {id:'a',title:'Later',status:'upcoming',priority:'normal',starts_at:null,due_at:'2026-10-01T00:00:00Z'},
   {id:'b',title:'Sooner',status:'upcoming',priority:'normal',starts_at:'2026-09-15T00:00:00Z',due_at:null},
   {id:'c',title:'Past',status:'upcoming',priority:'normal',due_at:'2026-09-01T00:00:00Z'},
   {id:'d',title:'Done',status:'completed',priority:'normal',due_at:'2026-09-14T00:00:00Z'}
 ],now,90);
-assert.deepEqual(coming.map(x=>x.item.id),['b','a']);
+assert.deepEqual(coming.map(x=>x.item.id),['today','b','a']);
+assert.equal(coming[0].daysAway,0);
 console.log('Life Admin domain tests passed');
