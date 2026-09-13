@@ -27,13 +27,18 @@ const home = renderHomePage({
       {id:'weight',title:'Weight trend',items:[{label:'28-day direction',value:'Up'}]},
       {id:'context',title:'Context',items:[{label:'Active phase',value:'Base phase'}]}
     ],
+    insights:[
+      {type:'sleep_duration',label:'Sleep',value:'Very short · 0h 0m',state:'poor'},
+      {type:'sleep_score',label:'Sleep score',value:'29 · Poor',state:'poor'},
+      {type:'rhr_delta',label:'Resting HR',value:'+4 bpm vs baseline',state:'watch'},
+      {type:'training_today',label:"Today's training",value:'No workout planned',state:'neutral'},
+      {type:'weight_trend',label:'28-day weight trend',value:'Up · +85.1 kg',detail:'Between early and recent averages',state:'watch'},
+      {type:'training_7d',label:'Last 7 days',value:'8 sessions',detail:'4 runs · 4 lifts · 33.4 km running',state:'neutral'}
+    ],
     bullets:[
-      'Sleep was very short at 0h 0m.',
-      'Sleep score was 29.',
-      'Resting HR is 4 bpm above the recent baseline.',
-      'No planned workout is scheduled for today.',
-      '28-day weight trend is up (+85.1 kg between early and recent averages).',
-      'Last 7 days: 8 sessions (4 runs, 4 lifts, 33.4 km running).'
+      'Sleep! was? very short — punctuation intentionally changed.',
+      'This prose no longer encodes UI semantics.',
+      'Narrative wording may change without changing insight cards.'
     ]
   },
   fitnessContext:{fetched_at:'2026-09-13T21:15:00Z'},
@@ -44,7 +49,8 @@ assert.match(home,/\.morning-digest\{[^}]*width:100%/,'Morning Digest should spa
 assert.match(home,/@media\(max-width:650px\)[\s\S]*\.card,\.morning-digest,\.admin-card\{width:100%/,'mobile cards should be explicitly full width');
 assert.match(home,/\.digest-card h3\{[^}]*font-family:'Instrument Serif'/,'digest card titles should use the D&S serif treatment');
 for (const expected of ['digest-insights','digest-insight','digest-insight-label','digest-insight-value','digest-insight-detail','Sleep</span><strong class="digest-insight-value">Very short · 0h 0m','Sleep score</span><strong class="digest-insight-value">29 · Poor','Resting HR</span><strong class="digest-insight-value">+4 bpm vs baseline','Today&#39;s training</span><strong class="digest-insight-value">No workout planned','28-day weight trend</span><strong class="digest-insight-value">Up · +85.1 kg','Last 7 days</span><strong class="digest-insight-value">8 sessions','4 runs · 4 lifts · 33.4 km running']) assert.ok(home.includes(expected),`digest insight missing ${expected}`);
-assert.ok(!home.includes('<div class="digest-notes"><p>Sleep was very short at 0h 0m.</p>'),'digest bullets should not render as sentence pills');
+assert.ok(!home.includes('Sleep! was? very short — punctuation intentionally changed.'),'narrative bullets must not drive insight rendering');
+assert.ok(!home.includes('<div class="digest-notes"><p>'),'digest bullets should not render as sentence pills');
 assert.ok(!home.includes('owner@example.com'),'home should not expose owner email');
 assert.ok(!home.includes('ppodolske@gmail.com'),'dashboard must not expose Personal source labels');
 assert.ok(!home.includes('>Home<'),'dashboard must not expose Home source label');
