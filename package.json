@@ -4,7 +4,9 @@
   "private": true,
   "main": "server.js",
   "scripts": {
+    "prestart": "node scripts/build-icons.js",
     "start": "node server.js",
+    "pretest": "node scripts/build-icons.js",
     "test": "node test.js",
     "job:reminders:morning": "node src/jobs/reminders.js morning",
     "job:reminders:noon": "node src/jobs/reminders.js noon",

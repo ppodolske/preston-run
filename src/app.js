@@ -1,5 +1,6 @@
 const { serveStatic } = require('./http/static');
 const { createRequestSupabase } = require('./auth/supabase');
+const { handleUatAuth } = require('./auth/uat-basic');
 const { handleAuthRoute } = require('./routes/auth');
 const { handlePeopleRoute } = require('./routes/people');
 const { handleLifeAdminRoute } = require('./routes/life-admin');
@@ -34,6 +35,7 @@ function createApp(config, dependencies = {}) {
   return async function app(req, res) {
     let url;
     try { url = new URL(req.url, config.siteUrl); } catch { return text(res, 400, 'Bad request'); }
+    if (await handleUatAuth(req, res, url, config)) return;
     if (serveStatic(req, res, url.pathname)) return;
     const supabase = createSupabase(req, res, config);
     const context = { config, supabase, calendarDeps: dependencies.calendarDeps, gmailDeps: createGmailDeps(config, dependencies.gmailDeps || {}) };

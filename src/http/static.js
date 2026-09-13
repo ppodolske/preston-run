@@ -4,18 +4,25 @@ const path = require('node:path');
 const PUBLIC_ROOT = path.resolve(__dirname, '../../public');
 const ALLOWED = new Map([
   ['/manifest.webmanifest', 'manifest.webmanifest'],
+  ['/preston.css', 'preston.css'],
+  ['/settings.css', 'settings.css'],
+  ['/notifications.js', 'notifications.js'],
+  ['/gmail-status.js', 'gmail-status.js'],
   ['/assets/preston-ai-logo.png', 'assets/preston-ai-logo.png'],
+  ['/favicon.ico', 'icons/favicon-32.png'],
+  ['/apple-touch-icon.png', 'icons/apple-touch-icon.png'],
+  ['/apple-touch-icon-precomposed.png', 'icons/apple-touch-icon.png'],
   ['/icons/favicon-32.png', 'icons/favicon-32.png'],
   ['/icons/apple-touch-icon.png', 'icons/apple-touch-icon.png'],
   ['/icons/icon-192.png', 'icons/icon-192.png'],
   ['/icons/icon-512.png', 'icons/icon-512.png'],
   ['/icons/icon-maskable-512.png', 'icons/icon-maskable-512.png'],
-  ['/sw.js','sw.js'],
-  ['/notifications.js','notifications.js']
+  ['/sw.js','sw.js']
 ]);
 
 function contentType(file) {
   if (file.endsWith('.png')) return 'image/png';
+  if (file.endsWith('.css')) return 'text/css; charset=utf-8';
   if (file.endsWith('.webmanifest')) return 'application/manifest+json; charset=utf-8';
   if (file.endsWith('.js')) return 'application/javascript; charset=utf-8';
   return 'application/octet-stream';
