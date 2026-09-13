@@ -15,6 +15,8 @@ assert.equal(config.isProduction, true);
 assert.equal(Object.hasOwn(config,'vapidPrivateKey'),false);
 assert.equal(Object.hasOwn(config,'supabaseServiceRoleKey'),false);
 assert.throws(() => loadConfig({}), /SITE_URL|SUPABASE_URL/);
-for(const key of ['GOOGLE_CALENDAR_CLIENT_ID','GOOGLE_CALENDAR_CLIENT_SECRET','CALENDAR_CREDENTIAL_KEY','DOSE_SCALE_CONTEXT_URL','DOSE_SCALE_SERVICE_TOKEN']){const env={...base};delete env[key];assert.throws(()=>loadConfig(env),new RegExp(key));}
+for(const key of ['GOOGLE_CALENDAR_CLIENT_ID','GOOGLE_CALENDAR_CLIENT_SECRET','CALENDAR_CREDENTIAL_KEY']){const env={...base};delete env[key];assert.throws(()=>loadConfig(env),new RegExp(key));}
+const cacheOnly={...base};delete cacheOnly.DOSE_SCALE_CONTEXT_URL;delete cacheOnly.DOSE_SCALE_SERVICE_TOKEN;
+const cacheOnlyConfig=loadConfig(cacheOnly);assert.equal(cacheOnlyConfig.doseScaleContextUrl,'');assert.equal(cacheOnlyConfig.doseScaleServiceToken,'');
 assert.throws(() => loadConfig({...base,PORT:'0'}), /PORT/);
 console.log('config tests passed');
