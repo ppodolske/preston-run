@@ -1,0 +1,21 @@
+function requireUser(user) {
+  if (!user || !user.id) throw new Error('Authenticated user is required');
+  return user.id;
+}
+function optionalText(value) { const text=String(value ?? '').trim(); return text || null; }
+function tripPayload(input={}) { return { title:String(input.title ?? '').trim(), status:input.status || 'planning', start_date:input.start_date || null, end_date:input.end_date || null, notes:optionalText(input.notes) }; }
+function segmentPayload(input={}) { return { position:Number(input.position || 1), segment_type:input.segment_type || 'travel', title:String(input.title ?? '').trim(), origin:optionalText(input.origin), destination:optionalText(input.destination), starts_at:input.starts_at || null, ends_at:input.ends_at || null, time_zone:String(input.time_zone || 'Australia/Sydney'), notes:optionalText(input.notes) }; }
+
+async function listTrips(supabase,user) { const uid=requireUser(user); const r=await supabase.from('trips').select('*').eq('user_id',uid).order('start_date',{ascending:true,nullsFirst:false}).order('title',{ascending:true}); if(r.error)throw r.error; return r.data||[]; }
+async function getTrip(supabase,user,id) { const uid=requireUser(user); const r=await supabase.from('trips').select('*').eq('id',id).eq('user_id',uid).maybeSingle(); if(r.error)throw r.error; return r.data||null; }
+async function createTrip(supabase,user,input) { const uid=requireUser(user); const r=await supabase.from('trips').insert({...tripPayload(input),user_id:uid}).select('*').single(); if(r.error)throw r.error; return r.data; }
+async function updateTrip(supabase,user,id,input) { const uid=requireUser(user); const r=await supabase.from('trips').update({...tripPayload(input),updated_at:new Date().toISOString()}).eq('id',id).eq('user_id',uid).select('*').maybeSingle(); if(r.error)throw r.error; return r.data||null; }
+async function deleteTrip(supabase,user,id) { const uid=requireUser(user); const r=await supabase.from('trips').delete().eq('id',id).eq('user_id',uid).select('id').maybeSingle(); if(r.error)throw r.error; return Boolean(r.data); }
+
+async function listSegments(supabase,user,tripId) { const uid=requireUser(user); const r=await supabase.from('trip_segments').select('*').eq('user_id',uid).eq('trip_id',tripId).order('position',{ascending:true}).order('starts_at',{ascending:true,nullsFirst:false}); if(r.error)throw r.error; return r.data||[]; }
+async function getSegment(supabase,user,id) { const uid=requireUser(user); const r=await supabase.from('trip_segments').select('*').eq('id',id).eq('user_id',uid).maybeSingle(); if(r.error)throw r.error; return r.data||null; }
+async function createSegment(supabase,user,tripId,input) { const uid=requireUser(user); const r=await supabase.from('trip_segments').insert({...segmentPayload(input),trip_id:tripId,user_id:uid}).select('*').single(); if(r.error)throw r.error; return r.data; }
+async function updateSegment(supabase,user,id,input) { const uid=requireUser(user); const r=await supabase.from('trip_segments').update({...segmentPayload(input),updated_at:new Date().toISOString()}).eq('id',id).eq('user_id',uid).select('*').maybeSingle(); if(r.error)throw r.error; return r.data||null; }
+async function deleteSegment(supabase,user,id) { const uid=requireUser(user); const r=await supabase.from('trip_segments').delete().eq('id',id).eq('user_id',uid).select('id').maybeSingle(); if(r.error)throw r.error; return Boolean(r.data); }
+
+module.exports={listTrips,getTrip,createTrip,updateTrip,deleteTrip,listSegments,getSegment,createSegment,updateSegment,deleteSegment,tripPayload,segmentPayload};
