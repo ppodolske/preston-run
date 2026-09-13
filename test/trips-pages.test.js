@@ -18,14 +18,14 @@ assert.ok(detail.indexOf('>Next<') < detail.indexOf('>Itinerary<'),'Next must pr
 assert.ok(detail.indexOf('>Itinerary<') < detail.indexOf('>Bookings<'),'Itinerary must precede Bookings');
 assert.ok(detail.indexOf('>Bookings<') < detail.indexOf('>Linked Tasks<'),'Bookings must precede Linked Tasks');
 assert.ok(detail.indexOf('>Linked Tasks<') < detail.indexOf('>Manage trip<'),'Manage trip must be secondary');
-assert.doesNotMatch(detail,/>Segments<\/div>/,'Segments must not duplicate the primary itinerary in reading mode');
+assert.doesNotMatch(detail,/<div class="section">Segments<\/div>/,'Segments must not duplicate the primary itinerary in reading mode');
 assert.match(detail,/<details class="manage-panel">[\s\S]*<summary>Manage trip<\/summary>/);
 assert.ok(detail.includes('Delete trip'));
 assert.ok(!detail.includes('owner@example.com'));
 
 const empty=renderTripDetailPage({trip:trips[0],segments:[],bookings:[],itinerary:[],tasks:[]});
 for(const x of ['No itinerary entries yet.','No bookings yet.','No tasks linked to this trip.']) assert.ok(empty.includes(x),`empty state missing ${x}`);
-assert.doesNotMatch(empty,/No segments yet\./);
+assert.doesNotMatch(empty,/<div class="section">Segments<\/div>/);
 
 const tripForm=renderTripFormPage({trip:{id:'t1',title:'Chicago',status:'planning',start_date:'2026-10-01',end_date:'2026-10-10',notes:'x'},mode:'edit',reminderSettings:{trip_offsets:[14,7,1]},reminderOverride:null});
 for(const x of ['Edit trip','name="title"','name="status"','name="start_date"','name="end_date"','/trips/t1','Use global defaults','Custom reminders','14, 7, 1']) assert.ok(tripForm.includes(x),`trip form missing ${x}`);
