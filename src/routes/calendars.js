@@ -23,6 +23,11 @@ function normalizedSources(rows=[]){return rows.map(row=>({provider_calendar_id:
 function keyFor(config,deps){return deps.encryptCredential?config.calendarCredentialKey:decodeCredentialKey(config.calendarCredentialKey);}
 function defaultDeps(){return{...data,googleProvider,appleProvider,encryptCredential,syncCalendars};}
 function mergeDeps(context){return{...defaultDeps(),...(context.calendarDeps||{})};}
+function validOAuthState(expected,received){
+  if(!expected||!received||expected.length<32)return false;
+  const a=Buffer.from(expected),b=Buffer.from(received);
+  return a.length===b.length&&crypto.timingSafeEqual(a,b);
+}
 
 async function renderSettings(res,supabase,user,deps,url){
   try{
@@ -49,7 +54,7 @@ async function handleCalendarsRoute(req,res,context){
   }
   if(req.method==='GET'&&url.pathname==='/settings/calendars/google/callback'){
     const expected=cookieValue(req,STATE_COOKIE),received=url.searchParams.get('state'),code=url.searchParams.get('code');
-    if(!expected||!received||!code||expected.length<32||!crypto.timingSafeEqual(Buffer.from(expected),Buffer.from(received))){text(res,400,'Invalid calendar authorization state',{'cache-control':'no-store'});return true;}
+    if(!code||!validOAuthState(expected,received)){text(res,400,'Invalid calendar authorization state',{'cache-control':'no-store'});return true;}
     try{
       const tokens=await deps.googleProvider.exchangeAuthorizationCode({code,clientId:config.googleCalendarClientId,clientSecret:config.googleCalendarClientSecret,redirectUri});
       if(!tokens.refreshToken)throw new Error('Google Calendar authorization did not return a refresh token');
