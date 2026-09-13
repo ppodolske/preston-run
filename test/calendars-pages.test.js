@@ -10,6 +10,8 @@ const sources=[
  {id:'s3',connection_id:'a1',provider_calendar_id:'/cal/1',display_name:'Home',selected:false,read_only:true}
 ];
 const html=renderCalendarsPage({connections:[google,apple],sources,flash:'Calendars synced.'});
+assert.match(html,/href="\/preston\.css"/);
+assert.match(html,/class="site-header"/);
 assert.match(html,/Calendars/);
 assert.match(html,/personal@example\.com/);
 assert.match(html,/icloud@example\.com/);
@@ -23,6 +25,8 @@ assert.match(html,/app-specific password/i);
 assert.match(html,/name="selected" value="true"/);
 assert.match(html,/name="selected" value="false"/);
 assert.match(html,/preston\.ai may use in the morning summary/);
+assert.match(html,/<label for="apple-email">Apple ID email<\/label>/);
+assert.match(html,/<label for="apple-app-specific-password">App-specific password<\/label>/);
 assert.doesNotMatch(html,/\bPreston\b/,'product references should use preston.ai');
 assert.doesNotMatch(html,/credential_ciphertext|refresh-token|access-token|app-password-secret/i);
 
