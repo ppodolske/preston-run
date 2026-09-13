@@ -10,7 +10,7 @@ assert.equal(providerStatusCode(null),null);
 function res(){return{status:null,headers:{},body:'',writeHead(s,h={}){this.status=s;this.headers={...this.headers,...h};},end(b=''){this.body+=b||'';}};}
 function req(method,url,body='',headers={}){const r=Readable.from(body?[Buffer.from(body)]:[]);r.method=method;r.url=url;r.headers={...(method==='POST'?{'content-type':'application/x-www-form-urlencoded',origin:'https://preston.run'}:{}),...headers};return r;}
 function ownerSupabase(owner=true){return{auth:{getUser:async()=>owner?{data:{user:{id:'u1',email:'owner@example.com'}},error:null}:{data:{user:null},error:null},signOut:async()=>{}}};}
-const config={siteUrl:'https://preston.run',ownerGoogleEmail:'owner@example.com',isProduction:true,googleCalendarClientId:'client-123',googleCalendarClientSecret:'client-secret',calendarCredentialKey:'key'};
+const config={siteUrl:'https://preston.run',ownerGoogleEmail:'owner@example.com',isProduction:true,googleCalendarClientId:'client-123',googleCalendarClientSecret:'client-secret',calendarCredentialKey:Buffer.alloc(32,7).toString('base64url')};
 
 (async()=>{
  const calls=[];
