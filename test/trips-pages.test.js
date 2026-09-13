@@ -10,7 +10,7 @@ const segments=[{id:'s1',trip_id:'t1',position:1,segment_type:'travel',title:'SY
 const bookings=[{id:'b1',trip_id:'t1',segment_id:'s1',position:1,booking_type:'flight',title:'Qantas flight',provider:'Qantas',confirmation_reference:'ABC123',status:'confirmed',starts_at:'2026-10-01T00:00:00.000Z',ends_at:'2026-10-01T14:00:00.000Z',time_zone:'Australia/Sydney',location:'ORD',booking_url:'https://example.com'}];
 const itinerary=[{type:'booking',record:bookings[0]},{type:'segment',record:segments[1]}];
 const detail=renderTripDetailPage({trip:trips[0],segments,bookings,itinerary,tasks:[{id:'task1',title:'Book train',status:'open',priority:'high'}]});
-for(const x of ['Chicago &amp; Milwaukee','Itinerary','Qantas flight','Confirmed','Milwaukee stay','Segments','Bookings','Book train','/tasks/task1/edit','/trips/t1/segments/new','/trips/t1/bookings/new','/trips/t1/delete']) assert.ok(detail.includes(x),`detail missing ${x}`);
+for(const x of ['Chicago &amp; Milwaukee','Itinerary','Qantas flight','Confirmed','Milwaukee stay','Segments','Bookings','Book train','/tasks/task1/edit','/tasks/new?trip_id=t1','Add task','/trips/t1/segments/new','/trips/t1/bookings/new','/trips/t1/delete']) assert.ok(detail.includes(x),`detail missing ${x}`);
 assert.ok(detail.includes('Delete trip'));
 assert.ok(!detail.includes('owner@example.com'));
 
