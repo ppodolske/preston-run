@@ -23,7 +23,6 @@ assert.match(html,/app-specific password/i);
 assert.match(html,/name="selected" value="true"/);
 assert.match(html,/name="selected" value="false"/);
 assert.match(html,/preston\.ai may use in the morning summary/);
-assert.match(html,/preston\.ai sign-in/);
 assert.doesNotMatch(html,/\bPreston\b/,'product references should use preston.ai');
 assert.doesNotMatch(html,/credential_ciphertext|refresh-token|access-token|app-password-secret/i);
 
@@ -31,6 +30,7 @@ const disconnected=renderCalendarsPage({connections:[],sources:[]});
 assert.match(disconnected,/Connect Google Calendar/);
 assert.match(disconnected,/Connect Apple Calendar/);
 assert.match(disconnected,/Apple ID email/);
+assert.match(disconnected,/preston\.ai sign-in/);
 assert.match(disconnected,/preston\.ai never needs your normal Apple Account password/);
 assert.doesNotMatch(disconnected,/\bPreston\b/,'product references should use preston.ai');
 assert.doesNotMatch(disconnected,/value="[^\"]*password/i);
