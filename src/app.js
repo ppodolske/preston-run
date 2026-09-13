@@ -2,6 +2,7 @@ const { serveStatic } = require('./http/static');
 const { createRequestSupabase } = require('./auth/supabase');
 const { handleAuthRoute } = require('./routes/auth');
 const { handlePeopleRoute } = require('./routes/people');
+const { handleLifeAdminRoute } = require('./routes/life-admin');
 const { handleSiteRoute } = require('./routes/site');
 const { text } = require('./http/respond');
 
@@ -15,6 +16,7 @@ function createApp(config, dependencies = {}) {
     const context = { config, supabase };
     if (await handleAuthRoute(req, res, context)) return;
     if (await handlePeopleRoute(req, res, context)) return;
+    if (await handleLifeAdminRoute(req, res, context)) return;
     if (await handleSiteRoute(req, res, context)) return;
     text(res, 404, 'Not found', {'cache-control':'no-store'});
   };
