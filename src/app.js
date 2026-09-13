@@ -1,5 +1,6 @@
 const { serveStatic } = require('./http/static');
 const { createRequestSupabase } = require('./auth/supabase');
+const { createBackgroundSupabaseClient } = require('./auth/background-supabase');
 const { handleUatAuth } = require('./auth/uat-basic');
 const { handleAuthRoute } = require('./routes/auth');
 const { handlePeopleRoute } = require('./routes/people');
@@ -12,12 +13,21 @@ const { handleGmailRoute } = require('./routes/gmail');
 const { handleSiteRoute } = require('./routes/site');
 const { text } = require('./http/respond');
 const { createGmailOAuth } = require('./services/gmail-oauth');
-const { createGmailManualScanDeps } = require('./services/gmail-manual-scan');
+const { startManualGmailScan } = require('./services/gmail-manual-scan');
 const { upsertGmailConnection, getGmailConnection, markGmailDisconnected } = require('./data/gmail-connections');
 const { encryptCredential, decodeCredentialKey } = require('./security/credential-crypto');
 
 function createGmailDeps(config, overrides = {}) {
+  const {
+    createBackgroundSupabaseClient: backgroundFactoryOverride,
+    startManualGmailScan: scanStarterOverride,
+    supabaseServiceRoleKey: serviceRoleKeyOverride,
+    ...publicOverrides
+  } = overrides;
   const key = () => decodeCredentialKey(config.calendarCredentialKey);
+  const backgroundFactory = backgroundFactoryOverride || createBackgroundSupabaseClient;
+  const scanStarter = scanStarterOverride || startManualGmailScan;
+  const serviceRoleKey = String(serviceRoleKeyOverride || process.env.SUPABASE_SERVICE_ROLE_KEY || '');
   const productionDeps = {
     googleOAuth: createGmailOAuth(config),
     getGmailConnection,
@@ -25,9 +35,13 @@ function createGmailDeps(config, overrides = {}) {
     upsertGmailConnection,
     encryptAccessToken(value) { return encryptCredential({ accessToken:value }, key()); },
     encryptRefreshToken(value) { return encryptCredential({ refreshToken:value }, key()); },
-    ...createGmailManualScanDeps(config)
+    startScanNow(_requestSupabase, userId) {
+      if (!serviceRoleKey) throw new Error('SUPABASE_SERVICE_ROLE_KEY is required for Gmail background scans');
+      const backgroundSupabase = backgroundFactory({ supabaseUrl:config.supabaseUrl, serviceRoleKey });
+      return scanStarter(backgroundSupabase, userId, config);
+    }
   };
-  return { ...productionDeps, ...overrides };
+  return { ...productionDeps, ...publicOverrides };
 }
 
 function createApp(config, dependencies = {}) {
