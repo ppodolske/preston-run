@@ -68,7 +68,7 @@ const jsonResponse=(body,status=200,headers={})=>({ok:status>=200&&status<300,st
       jsonResponse({items:[
         {id:'timed-1',summary:'Dentist',status:'confirmed',htmlLink:'https://calendar.google.com/x',location:'Clinic',updated:'2026-09-12T01:00:00.000Z',start:{dateTime:'2026-09-13T08:30:00+10:00',timeZone:'Australia/Sydney'},end:{dateTime:'2026-09-13T09:15:00+10:00',timeZone:'Australia/Sydney'},attendees:[{self:true,responseStatus:'accepted'}],recurringEventId:'series-1',originalStartTime:{dateTime:'2026-09-13T08:30:00+10:00'}},
         {id:'all-day-1',summary:'Birthday',status:'tentative',start:{date:'2026-09-14'},end:{date:'2026-09-15'},attendees:[{self:true,responseStatus:'tentative'}]}
-      ],nextPageToken:'next'},
+      ],nextPageToken:'next'}),
       jsonResponse({items:[{id:'cancelled-1',summary:'Cancelled',status:'cancelled',start:{dateTime:'2026-09-14T08:00:00Z'},end:{dateTime:'2026-09-14T09:00:00Z'},attendees:[{self:true,responseStatus:'declined'}]}]})
     ];
     const calls=[];
