@@ -1,6 +1,25 @@
 function throwIfError(error){if(error)throw error;}
 function nowIso(){return new Date().toISOString();}
 
+function scanProgressPatch(input={}){
+  const map={
+    discoveredCount:'discovered_count',
+    processedCount:'processed_count',
+    ignoredCount:'ignored_count',
+    relevantCount:'relevant_count',
+    factsCreatedCount:'facts_created_count',
+    recordsCreatedCount:'records_created_count',
+    recordsUpdatedCount:'records_updated_count',
+    reviewItemsCreatedCount:'review_items_created_count',
+    pdfUnreadableCount:'pdf_unreadable_count'
+  };
+  const patch={};
+  for(const [from,to] of Object.entries(map)){
+    if(Object.hasOwn(input,from))patch[to]=input[from];
+  }
+  return patch;
+}
+
 async function startGmailScanRun(supabase,userId,connection,scanType,options={}){
   const row={
     user_id:userId,
@@ -17,7 +36,8 @@ async function startGmailScanRun(supabase,userId,connection,scanType,options={})
 }
 
 async function updateGmailScanProgress(supabase,userId,scanRunId,patch){
-  const {data,error}=await supabase.from('gmail_scan_runs').update(patch).eq('user_id',userId).eq('id',scanRunId).select('*').single();
+  const dbPatch=scanProgressPatch(patch);
+  const {data,error}=await supabase.from('gmail_scan_runs').update(dbPatch).eq('user_id',userId).eq('id',scanRunId).select('*').single();
   throwIfError(error);
   return data;
 }
@@ -55,4 +75,4 @@ async function failGmailScanRun(supabase,userId,connectionId,scanRunId,errorSumm
   return data;
 }
 
-module.exports={startGmailScanRun,updateGmailScanProgress,finishGmailScanRun,failGmailScanRun};
+module.exports={startGmailScanRun,updateGmailScanProgress,finishGmailScanRun,failGmailScanRun,scanProgressPatch};
