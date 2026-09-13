@@ -1,0 +1,10 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const dir=path.join(__dirname,'..','supabase','migrations');
+const files=fs.existsSync(dir)?fs.readdirSync(dir):[];
+const schemaFile=files.find(x=>x.endsWith('_v080_trips_bookings.sql'));assert.ok(schemaFile,'v0.8 Trips migration required');
+const sql=fs.readFileSync(path.join(dir,schemaFile),'utf8');
+for(const pattern of [/create table public\.trips/i,/create table public\.trip_segments/i,/create table public\.bookings/i,/alter table public\.tasks add column linked_trip_id uuid/i,/status in \('planning','upcoming','in_progress','completed','cancelled'\)/i,/segment_type in \('travel','stay','activity','other'\)/i,/booking_type in \('flight','accommodation','hire_car','activity','other'\)/i,/status in \('confirmed','tentative','changed','cancelled'\)/i,/foreign key \(segment_id, trip_id, user_id\) references public\.trip_segments\(id, trip_id, user_id\)/i,/foreign key \(linked_trip_id, user_id\) references public\.trips\(id, user_id\)/i,/alter table public\.trips enable row level security/i,/alter table public\.trip_segments enable row level security/i,/alter table public\.bookings enable row level security/i,/using \(\(select auth\.uid\(\)\) = user_id\)/i,/with check \(\(select auth\.uid\(\)\) = user_id\)/i])assert.match(sql,pattern);
+const restrictFile=files.find(x=>x.endsWith('_v080_restrict_trip_privileges.sql'));assert.ok(restrictFile,'v0.8 trip privilege migration required');const harden=fs.readFileSync(path.join(dir,restrictFile),'utf8');assert.match(harden,/revoke all on public\.trips, public\.trip_segments, public\.bookings from anon/i);assert.match(harden,/grant select, insert, update, delete on public\.trips, public\.trip_segments, public\.bookings to authenticated/i);
+console.log('Trips migration tests passed');

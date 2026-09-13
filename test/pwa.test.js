@@ -1,0 +1,11 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const manifest = JSON.parse(fs.readFileSync(path.join(__dirname,'../public/manifest.webmanifest'),'utf8'));
+assert.equal(manifest.name,'preston.ai'); assert.equal(manifest.short_name,'preston.ai'); assert.equal(manifest.start_url,'/'); assert.equal(manifest.display,'standalone');
+assert.ok(manifest.icons.some(i=>i.sizes==='192x192'));
+assert.ok(manifest.icons.some(i=>i.sizes==='512x512' && !i.purpose));
+assert.ok(manifest.icons.some(i=>i.sizes==='512x512' && i.purpose==='maskable'));
+for (const icon of manifest.icons) assert.ok(fs.existsSync(path.join(__dirname,'../public',icon.src)),`missing ${icon.src}`);
+for (const file of ['assets/preston-ai-logo.png','icons/favicon-32.png','icons/apple-touch-icon.png']) assert.ok(fs.existsSync(path.join(__dirname,'../public',file)),`missing ${file}`);
+console.log('pwa tests passed');

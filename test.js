@@ -1,24 +1,3 @@
-const fs=require('fs');
-const path=require('path');
-
-const source=fs.readFileSync(path.join(__dirname,'server.js'),'utf8');
-const checks=[
-  ['Archive app name', /name:'Archive'/],
-  ['Archive URL', /https:\/\/archive\.preston\.run/],
-  ['Archive status element', /id="archiveStatus"/],
-  ['Archive status update', /setStatus\('archive'/],
-  ['Archive GitHub admin link', /github\.com\/ppodolske\/archive/],
-  ['Archive Railway admin link', /2bc0b4e2-ca87-4b74-94ff-828b9160444a/],
-  ['Existing weather condition hook', /id="condition"/],
-  ['v0.4.0 release marker', /VERSION='0\.4\.0'/],
-];
-
-let failed=false;
-for(const [label,pattern] of checks){
-  if(!pattern.test(source)){
-    failed=true;
-    console.error(`FAIL: ${label}`);
-  }
-}
-if(failed) process.exit(1);
-console.log('Preston.run Archive integration smoke test passed.');
+const {spawnSync}=require('node:child_process');
+const files=['test/config.test.js','test/cookies.test.js','test/supabase-adapter.test.js','test/auth-guard.test.js','test/migration.test.js','test/life-admin-migration.test.js','test/trips-migration.test.js','test/people-data.test.js','test/birthdays.test.js','test/forms.test.js','test/life-admin-domain.test.js','test/trips-domain.test.js','test/life-admin-data.test.js','test/trips-data.test.js','test/pages.test.js','test/people-pages.test.js','test/life-admin-pages.test.js','test/trips-pages.test.js','test/routes.test.js','test/people-routes.test.js','test/life-admin-routes.test.js','test/trips-routes.test.js','test/pwa.test.js','test/smoke.test.js'];
+for(const file of files){const result=spawnSync(process.execPath,[file],{stdio:'inherit'});if(result.status!==0)process.exit(result.status||1);}console.log('preston.ai v0.8.0 test suite passed');

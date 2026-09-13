@@ -1,1 +1,17 @@
-{"name":"preston-run","version":"0.4.0","private":true,"main":"server.js","scripts":{"start":"node server.js","test":"node test.js"},"engines":{"node":">=20"}}
+{
+  "name": "preston-run",
+  "version": "0.8.0",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test.js"
+  },
+  "dependencies": {
+    "@supabase/ssr": "0.10.3",
+    "@supabase/supabase-js": "2.109.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

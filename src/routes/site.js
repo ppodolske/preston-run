@@ -1,0 +1,91 @@
+const { html, json, text } = require('../http/respond');
+const { renderLoginPage } = require('../pages/login');
+const { renderHomePage } = require('../pages/home');
+const { getAuthorizedOwner } = require('../auth/guard');
+const { listPeople } = require('../data/people');
+const { listLifeItems } = require('../data/life-admin');
+const { listTasks } = require('../data/tasks');
+const { listTrips } = require('../data/trips');
+const { getUpcomingBirthdays, todayInTimeZone } = require('../domain/birthdays');
+const { getComingUpLifeItems, getNeedsAttention } = require('../domain/life-admin');
+const { getUpcomingTrips } = require('../domain/trips');
+const { APPS, VERSION } = require('../branding');
+
+async function probe(url) {
+  const started = Date.now();
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3500);
+    const response = await fetch(url, { method:'GET', redirect:'follow', signal:controller.signal, headers:{'user-agent':`preston.ai status/${VERSION}`} });
+    clearTimeout(timer);
+    return { online:response.status < 500, status:response.status, ms:Date.now()-started };
+  } catch {
+    return { online:false, status:null, ms:Date.now()-started };
+  }
+}
+
+async function handleSiteRoute(req, res, context) {
+  const { supabase, config } = context;
+  let url;
+  try { url = new URL(req.url, config.siteUrl); } catch { text(res, 400, 'Bad request'); return true; }
+
+  if (req.method === 'GET' && url.pathname === '/health') {
+    json(res, 200, { ok:true, version:VERSION }, { 'cache-control':'no-store' });
+    return true;
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/status') {
+    const auth = await getAuthorizedOwner(supabase, config);
+    if (!auth.user) { json(res, 401, { error:'unauthorized' }, { 'cache-control':'no-store' }); return true; }
+    const results = await Promise.all(APPS.map(app => probe(app.url)));
+    const statuses = Object.fromEntries(APPS.map((app, i) => [app.key, results[i]]));
+    json(res, 200, { checkedAt:new Date().toISOString(), ...statuses }, { 'cache-control':'private, no-store' });
+    return true;
+  }
+
+  if (req.method === 'GET' && url.pathname === '/') {
+    const auth = await getAuthorizedOwner(supabase, config);
+    if (auth.user) {
+      let upcomingBirthdays = [];
+      let birthdayDataUnavailable = false;
+      let upcomingLifeItems = [];
+      let needsAttention = [];
+      let lifeAdminDataUnavailable = false;
+      let upcomingTrips = [];
+      let tripDataUnavailable = false;
+      try {
+        const people = await listPeople(supabase);
+        upcomingBirthdays = getUpcomingBirthdays(people, todayInTimeZone('Australia/Sydney'), 90);
+      } catch {
+        birthdayDataUnavailable = true;
+      }
+      try {
+        const [lifeItems, tasks] = await Promise.all([listLifeItems(supabase), listTasks(supabase)]);
+        const now = new Date();
+        upcomingLifeItems = getComingUpLifeItems(lifeItems, now, 90);
+        needsAttention = getNeedsAttention({ lifeItems, tasks, now });
+      } catch {
+        lifeAdminDataUnavailable = true;
+      }
+      try {
+        const trips = await listTrips(supabase, auth.user);
+        upcomingTrips = getUpcomingTrips(trips, new Date(), 180);
+      } catch {
+        tripDataUnavailable = true;
+      }
+      html(res, 200, renderHomePage({ user:auth.user, upcomingBirthdays, birthdayDataUnavailable, upcomingLifeItems, needsAttention, lifeAdminDataUnavailable, upcomingTrips, tripDataUnavailable }), { 'cache-control':'private, no-store' });
+      return true;
+    }
+    if (auth.reason === 'not_owner') {
+      await supabase.auth.signOut();
+      html(res, 403, renderLoginPage({ error:'This Google account does not have access.' }), { 'cache-control':'no-store' });
+      return true;
+    }
+    const error = url.searchParams.get('auth_error') ? 'Sign-in could not be completed. Please try again.' : null;
+    html(res, 200, renderLoginPage({ error }), { 'cache-control':'no-store' });
+    return true;
+  }
+
+  return false;
+}
+module.exports = { handleSiteRoute, probe };
