@@ -102,8 +102,62 @@ function buildDashboardCalendar({events=[],sources=[],now=new Date()}={}){
   return groups;
 }
 
+function normalizeMonthKey(monthKey,now=new Date()){
+  if(monthKey==null||monthKey==='')return currentSydneyDate(now).slice(0,7);
+  const value=String(monthKey);
+  if(!/^\d{4}-\d{2}$/.test(value))throw new Error('Invalid calendar month');
+  const [year,month]=value.split('-').map(Number);
+  if(year<1||month<1||month>12)throw new Error('Invalid calendar month');
+  return value;
+}
+function shiftMonthKey(monthKey,delta){
+  const [year,month]=monthKey.split('-').map(Number);
+  const date=new Date(Date.UTC(year,month-1+delta,1));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth()+1).padStart(2,'0')}`;
+}
+function getCalendarMonthWindow(monthKey,now=new Date()){
+  const normalized=normalizeMonthKey(monthKey,now);
+  const [year,month]=normalized.split('-').map(Number);
+  const firstDate=`${normalized}-01`;
+  const lastDay=new Date(Date.UTC(year,month,0)).getUTCDate();
+  const lastDate=`${normalized}-${String(lastDay).padStart(2,'0')}`;
+  const currentMonth=currentSydneyDate(now).slice(0,7);
+  const start=localDateTimeToInstant(firstDate).toISOString();
+  const nextMonthFirst=`${shiftMonthKey(normalized,1)}-01`;
+  const end=new Date(localDateTimeToInstant(nextMonthFirst).getTime()-1).toISOString();
+  return{monthKey:normalized,firstDate,lastDate,previousMonth:shiftMonthKey(normalized,-1),nextMonth:shiftMonthKey(normalized,1),currentMonth,start,end};
+}
+function monthDisplayItem(event,source){
+  return{id:event.id,title:String(event.title||''),allDay:Boolean(event.all_day),startsAt:event.starts_at||null,endsAt:event.ends_at||null,startDate:event.start_date||null,endDate:event.end_date||null,location:event.location||null,externalUrl:event.external_url||null,sourceName:String(source.display_name||'Calendar'),sourceColor:source.color||null};
+}
+function buildCalendarMonth({events=[],sources=[],monthKey,now=new Date()}={}){
+  const window=getCalendarMonthWindow(monthKey,now);
+  const days={};
+  for(let key=window.firstDate;key<=window.lastDate;key=shiftDateKey(key,{days:1}))days[key]=[];
+  const sourceById=new Map(sources.filter(source=>source.selected!==false).map(source=>[String(source.id),source]));
+  const monthStart=new Date(window.start).getTime(),monthEnd=new Date(window.end).getTime();
+  for(const event of events){
+    if(!event||event.status==='cancelled'||event.owner_response==='declined')continue;
+    const source=sourceById.get(String(event.calendar_source_id));if(!source)continue;
+    const item=monthDisplayItem(event,source);
+    if(event.all_day){
+      if(!validDateKey(event.start_date)||!validDateKey(event.end_date)||event.end_date<=window.firstDate||event.start_date>window.lastDate)continue;
+      let key=event.start_date<window.firstDate?window.firstDate:event.start_date;
+      const exclusiveEnd=event.end_date>shiftDateKey(window.lastDate,{days:1})?shiftDateKey(window.lastDate,{days:1}):event.end_date;
+      for(;key<exclusiveEnd;key=shiftDateKey(key,{days:1}))if(days[key])days[key].push(item);
+      continue;
+    }
+    const start=new Date(event.starts_at).getTime(),end=new Date(event.ends_at).getTime();
+    if(!Number.isFinite(start)||!Number.isFinite(end)||end<monthStart||start>monthEnd)continue;
+    const key=dateKey(localParts(new Date(event.starts_at),SYDNEY_TZ));
+    if(days[key])days[key].push(item);
+  }
+  for(const list of Object.values(days))list.sort((a,b)=>{if(a.allDay!==b.allDay)return a.allDay?-1:1;const at=a.startsAt?new Date(a.startsAt).getTime():0,bt=b.startsAt?new Date(b.startsAt).getTime():0;return at-bt||String(a.title).localeCompare(String(b.title));});
+  return{...window,days};
+}
+
 function isConnectionStale(connection={},now=new Date()){
   if(!connection.last_success_at)return true;const last=new Date(connection.last_success_at).getTime();if(!Number.isFinite(last))return true;return now.getTime()-last>DAY_MS;
 }
 
-module.exports={SYDNEY_TZ,getCalendarSyncWindow,getMorningCalendarWindow,getDashboardCalendarWindow,shouldRunCalendarSync,normalizeCalendarEvent,isCalendarEventDigestEligible,isDashboardCalendarEventEligible,sortCalendarDigestEvents,buildDashboardCalendar,isConnectionStale};
+module.exports={SYDNEY_TZ,getCalendarSyncWindow,getMorningCalendarWindow,getDashboardCalendarWindow,getCalendarMonthWindow,shouldRunCalendarSync,normalizeCalendarEvent,isCalendarEventDigestEligible,isDashboardCalendarEventEligible,sortCalendarDigestEvents,buildDashboardCalendar,buildCalendarMonth,isConnectionStale};
