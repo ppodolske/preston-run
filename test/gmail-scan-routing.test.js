@@ -65,7 +65,7 @@ async function runCase(message,{tripActions={},lifeAdminActions={}}={}){
   assert.equal(marketing.result.lifeAdminCount,0);
 
   const trips=[];
-  const flight=await runCase({sender:'Virgin Australia <no-reply@virginaustralia.com>',subject:'Your Virgin Australia Travel Reminder',snippet:'Flight VA123 booking ABC123'},{
+  const flight=await runCase({sender:'Virgin Australia <no-reply@virginaustralia.com>',subject:'Your Virgin Australia Travel Reminder',snippet:'Flight VA123. Booking reference ABC123.'},{
     tripActions:{getManualFieldsForMatch:async()=>new Set(),applyCreateTripFromGmail:async(decision)=>trips.push(decision)}
   });
   assert.equal(flight.result.tripCount,1);
