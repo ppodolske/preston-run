@@ -4,9 +4,24 @@ const {html,redirect,text}=require('../http/respond');
 const {getGmailConnection,markGmailDisconnected}=require('../data/gmail-connections');
 const {renderGmailSettingsPage}=require('../pages/gmail-settings');
 
+const GMAIL_READONLY_SCOPE='https://www.googleapis.com/auth/gmail.readonly';
+
 async function owner(supabase,config,res){const auth=await getAuthorizedOwner(supabase,config);if(auth.user)return auth.user;if(auth.reason==='not_owner')await supabase.auth.signOut();redirect(res,'/');return null;}
 function privateHtml(res,status,body){html(res,status,body,{'cache-control':'private, no-store'});}
 function isGmailPath(path){return path==='/me/settings/gmail'||path==='/me/settings/gmail/connect'||path==='/me/settings/gmail/callback'||path==='/me/settings/gmail/disconnect'||path==='/me/settings/gmail/scan-now'||path==='/me/settings/gmail/retry-failed';}
+function buildGmailAuthUrl(googleOAuth,config){return googleOAuth.buildAuthUrl({scope:[GMAIL_READONLY_SCOPE],redirectUri:config.gmail&&config.gmail.redirectUri});}
+
+async function completeGmailOAuthCallback({supabase,userId,code,config,googleOAuth,encrypt,upsertGmailConnection,startScanNow}){
+  if(startScanNow)void startScanNow;
+  const exchanged=await googleOAuth.exchangeCode(code,{redirectUri:config.gmail&&config.gmail.redirectUri});
+  return upsertGmailConnection(supabase,userId,{
+    gmailAccountEmail:exchanged.accountEmail,
+    googleSubject:exchanged.googleSubject,
+    accessTokenCiphertext:encrypt(exchanged.accessToken),
+    refreshTokenCiphertext:encrypt(exchanged.refreshToken),
+    scope:exchanged.scope
+  });
+}
 
 async function listRecentScans(supabase,userId,limit=10){
   const result=await supabase.from('gmail_scan_runs').select('*').eq('user_id',userId).order('started_at',{ascending:false}).limit(limit);
@@ -32,8 +47,7 @@ async function handleGmailRoute(req,res,context){
   if(req.method==='GET'&&url.pathname==='/me/settings/gmail/callback'){
     if(!deps.googleOAuth||!deps.encrypt||!deps.upsertGmailConnection){text(res,501,'Gmail OAuth is not configured',{'cache-control':'no-store'});return true;}
     try{
-      const exchanged=await deps.googleOAuth.exchangeCode(url.searchParams.get('code'),{redirectUri:config.gmail&&config.gmail.redirectUri});
-      await deps.upsertGmailConnection(supabase,user.id,{gmailAccountEmail:exchanged.accountEmail,googleSubject:exchanged.googleSubject,accessTokenCiphertext:deps.encrypt(exchanged.accessToken),refreshTokenCiphertext:deps.encrypt(exchanged.refreshToken),scope:exchanged.scope});
+      await completeGmailOAuthCallback({supabase,userId:user.id,code:url.searchParams.get('code'),config,googleOAuth:deps.googleOAuth,encrypt:deps.encrypt,upsertGmailConnection:deps.upsertGmailConnection,startScanNow:deps.startScanNow});
       redirect(res,'/me/settings/gmail?connected=1');
     }catch{ text(res,500,'Unable to connect Gmail',{'cache-control':'no-store'}); }
     return true;
@@ -43,8 +57,7 @@ async function handleGmailRoute(req,res,context){
   try{await readForm(req);}catch(e){text(res,e.statusCode||400,e.message||'Invalid request',{'cache-control':'no-store'});return true;}
   if(url.pathname==='/me/settings/gmail/connect'){
     if(!deps.googleOAuth||!deps.googleOAuth.buildAuthUrl){text(res,501,'Gmail OAuth is not configured',{'cache-control':'no-store'});return true;}
-    const authUrl=deps.googleOAuth.buildAuthUrl({scope:['https://www.googleapis.com/auth/gmail.readonly'],redirectUri:config.gmail&&config.gmail.redirectUri});
-    redirect(res,authUrl);
+    redirect(res,buildGmailAuthUrl(deps.googleOAuth,config));
     return true;
   }
   if(url.pathname==='/me/settings/gmail/disconnect'){
@@ -61,4 +74,4 @@ async function handleGmailRoute(req,res,context){
 
 function createGmailRouter(deps={}){return function gmailRouter(req,res){return handleGmailRoute(req,res,deps);};}
 
-module.exports={handleGmailRoute,createGmailRouter,listRecentScans,isGmailPath};
+module.exports={handleGmailRoute,createGmailRouter,listRecentScans,isGmailPath,buildGmailAuthUrl,completeGmailOAuthCallback,GMAIL_READONLY_SCOPE};
