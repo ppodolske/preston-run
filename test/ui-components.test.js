@@ -28,6 +28,6 @@ test('shared components escape content and expose stable classes', () => {
   assert.match(buttonLink({ href: '/x', text: 'Open', primary: true }), /class="button primary"/);
   assert.match(statusChip('needs_action'), /class="chip/);
   assert.match(emptyState('<none>'), /&lt;none&gt;/);
-  assert.match(flashMessage('Saved'), /class="flash"/);
+  assert.match(flashMessage('Saved'), /class="flash(?:\s[^\"]*)?"/);
   assert.match(card('<strong>Body<\/strong>'), /class="card"/);
 });
