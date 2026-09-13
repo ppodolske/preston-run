@@ -67,11 +67,33 @@ async function exchangeGmailCode(config,code,options={}){
   };
 }
 
-function createGmailOAuth(config,options={}){
+async function refreshGmailAccessToken(config,refreshToken,options={}){
+  if(!refreshToken)throw new Error('Gmail refresh token is required');
+  const gmail=requireGmailConfig(config);
+  const fetchImpl=options.fetch||global.fetch;
+  if(!fetchImpl)throw new Error('fetch is required');
+  const body=new URLSearchParams({
+    refresh_token:refreshToken,
+    client_id:gmail.clientId,
+    client_secret:gmail.clientSecret,
+    grant_type:'refresh_token'
+  });
+  const token=await readJson(await fetchImpl(GOOGLE_TOKEN_URL,{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:body.toString()}),'Gmail token refresh');
+  if(!token.access_token)throw new Error('Gmail token refresh returned no access token');
   return {
-    buildAuthUrl(args={}){return buildGmailAuthUrl(config,args);},
-    exchangeCode(code){return exchangeGmailCode(config,code,options);}
+    accessToken:token.access_token,
+    scope:token.scope||GMAIL_READONLY_SCOPE,
+    expiresIn:token.expires_in||null,
+    tokenType:token.token_type||'Bearer'
   };
 }
 
-module.exports={GMAIL_READONLY_SCOPE,buildGmailAuthUrl,fetchGmailProfile,exchangeGmailCode,createGmailOAuth};
+function createGmailOAuth(config,options={}){
+  return {
+    buildAuthUrl(args={}){return buildGmailAuthUrl(config,args);},
+    exchangeCode(code){return exchangeGmailCode(config,code,options);},
+    refreshAccessToken(refreshToken){return refreshGmailAccessToken(config,refreshToken,options);}
+  };
+}
+
+module.exports={GMAIL_READONLY_SCOPE,buildGmailAuthUrl,fetchGmailProfile,exchangeGmailCode,refreshGmailAccessToken,createGmailOAuth};
