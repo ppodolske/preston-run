@@ -11,7 +11,7 @@ const html=renderLifeAdminPage({lifeItems:[...items,noDateItem],tasks,people,fil
 for(const text of ['Life Admin','Needs Attention','Coming Up','Add item','Add task','Licence &lt;renewal&gt;','Pay &amp; submit','Alice &lt;Friend&gt;','Overdue','Urgent'])assert.ok(html.includes(text),`missing ${text}`);
 assert.match(html,/href="\/preston\.css"/);
 assert.match(html,/class="site-header"/);
-assert.match(html,/href="\/life-admin"[^>]*>Active<\/a>/);
+assert.match(html,/href="\/life-admin\?filter=renewal"[^>]*>Active<\/a>/);
 assert.match(html,/filter=needs_action[^>]*>Needs attention<\/a>/);
 assert.match(html,/filter=upcoming[^>]*>Upcoming<\/a>/);
 assert.match(html,/filter=completed[^>]*>Completed<\/a>/);
