@@ -22,7 +22,10 @@ function response() {
 for (const [pathname, contentType] of [
   ['/preston.css', /text\/css/],
   ['/settings.css', /text\/css/],
-  ['/gmail-status.js', /javascript/]
+  ['/gmail-status.js', /javascript/],
+  ['/favicon.ico', /image\/png/],
+  ['/apple-touch-icon.png', /image\/png/],
+  ['/apple-touch-icon-precomposed.png', /image\/png/]
 ]) {
   test(`${pathname} is an allowed, readable static asset`, () => {
     assert.ok(ALLOWED.has(pathname), `${pathname} missing from static allowlist`);
