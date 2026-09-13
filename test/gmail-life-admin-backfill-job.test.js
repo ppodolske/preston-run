@@ -1,5 +1,5 @@
 const assert=require('node:assert/strict');
-const {BACKFILL_CONFIRMATION,assertBackfillConfirmation,normalizeAccessToken,listBackfillSources}=require('../src/jobs/gmail-life-admin-backfill');
+const {BACKFILL_CONFIRMATION,assertBackfillConfirmation,normalizeAccessToken,listBackfillSources,createBackfillProvider}=require('../src/jobs/gmail-life-admin-backfill');
 const {TARGET_SCAN_IDS}=require('../src/services/gmail-life-admin-backfill');
 
 assert.throws(()=>assertBackfillConfirmation({}),/confirmation/i);
@@ -22,5 +22,21 @@ assert.throws(()=>normalizeAccessToken({}),/access token/i);
   assert.deepEqual(rows,[{id:'s1'}]);
   assert.deepEqual(calls.find(c=>c[0]==='in'),['in','scan_run_id',TARGET_SCAN_IDS]);
   assert.ok(calls.some(c=>c[0]==='eq'&&c[1]==='user_id'&&c[2]==='user1'));
+
+  let resolverCalls=0;
+  let providerToken=null;
+  const provider=await createBackfillProvider({
+    supabase:{db:true},
+    userId:'user1',
+    connection:{id:'conn1',access_token_ciphertext:'enc-old',refresh_token_ciphertext:'enc-refresh'},
+    env:{CALENDAR_CREDENTIAL_KEY:'encoded-key',GMAIL_CLIENT_ID:'client1',GMAIL_CLIENT_SECRET:'secret1',GMAIL_REDIRECT_URI:'https://preston.run/me/settings/gmail/callback'},
+    fetchImpl:async()=>{},
+    decodeCredentialKey:()=> 'key1',
+    resolveGmailAccessToken:async args=>{resolverCalls+=1;assert.equal(args.connection.id,'conn1');assert.equal(args.config.gmail.clientId,'client1');return 'fresh-access';},
+    createGmailProvider:args=>{providerToken=args.accessToken;return {provider:true};}
+  });
+  assert.equal(resolverCalls,1);
+  assert.equal(providerToken,'fresh-access');
+  assert.deepEqual(provider,{provider:true});
   console.log('gmail Life Admin backfill job tests passed');
 })().catch(error=>{console.error(error);process.exit(1);});
