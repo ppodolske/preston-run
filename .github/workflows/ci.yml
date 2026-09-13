@@ -27,7 +27,7 @@ jobs:
       - run: node --check src/jobs/reminders.js
       - run: node --check src/jobs/calendar-sync.js
   lockfile:
-    if: startsWith(github.event.head_commit.message, 'build: regenerate v0.10 lockfile')
+    if: "${{ startsWith(github.event.head_commit.message, 'build: regenerate v0.10 lockfile') }}"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
