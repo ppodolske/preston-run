@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const { loadConfig } = require('../src/config');
-const base={ PORT:'4321', NODE_ENV:'production', SITE_URL:'https://preston.run/', SUPABASE_URL:'https://example.supabase.co', SUPABASE_PUBLISHABLE_KEY:'sb_publishable_test', SUPABASE_SERVICE_ROLE_KEY:'service-role-key', OWNER_GOOGLE_EMAIL:'OWNER@example.com', VAPID_PUBLIC_KEY:'public-key', GOOGLE_CALENDAR_CLIENT_ID:'calendar-client', GOOGLE_CALENDAR_CLIENT_SECRET:'calendar-secret', CALENDAR_CREDENTIAL_KEY:'calendar-key', DOSE_SCALE_CONTEXT_URL:'https://dose.preston.run/api/preston/daily-context', DOSE_SCALE_SERVICE_TOKEN:'dose-service-token' };
+const base={ PORT:'4321', NODE_ENV:'production', SITE_URL:'https://preston.run/', SUPABASE_URL:'https://example.supabase.co', SUPABASE_PUBLISHABLE_KEY:'sb_publishable_test', OWNER_GOOGLE_EMAIL:'OWNER@example.com', VAPID_PUBLIC_KEY:'public-key', GOOGLE_CALENDAR_CLIENT_ID:'calendar-client', GOOGLE_CALENDAR_CLIENT_SECRET:'calendar-secret', CALENDAR_CREDENTIAL_KEY:'calendar-key', DOSE_SCALE_CONTEXT_URL:'https://dose.preston.run/api/preston/daily-context', DOSE_SCALE_SERVICE_TOKEN:'dose-service-token' };
 const config = loadConfig(base);
 assert.equal(config.port, 4321);
 assert.equal(config.siteUrl, 'https://preston.run');
@@ -11,9 +11,9 @@ assert.equal(config.googleCalendarClientSecret,'calendar-secret');
 assert.equal(config.calendarCredentialKey,'calendar-key');
 assert.equal(config.doseScaleContextUrl,'https://dose.preston.run/api/preston/daily-context');
 assert.equal(config.doseScaleServiceToken,'dose-service-token');
-assert.equal(config.supabaseServiceRoleKey,'service-role-key');
 assert.equal(config.isProduction, true);
 assert.equal(Object.hasOwn(config,'vapidPrivateKey'),false);
+assert.equal(Object.hasOwn(config,'supabaseServiceRoleKey'),false);
 assert.throws(() => loadConfig({}), /SITE_URL|SUPABASE_URL/);
 for(const key of ['GOOGLE_CALENDAR_CLIENT_ID','GOOGLE_CALENDAR_CLIENT_SECRET','CALENDAR_CREDENTIAL_KEY']){const env={...base};delete env[key];assert.throws(()=>loadConfig(env),new RegExp(key));}
 const cacheOnly={...base};delete cacheOnly.DOSE_SCALE_CONTEXT_URL;delete cacheOnly.DOSE_SCALE_SERVICE_TOKEN;
