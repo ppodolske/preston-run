@@ -21,11 +21,6 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm install --package-lock-only --save-exact fast-xml-parser@5.11.1 ical.js@2.2.1
-      - uses: actions/upload-artifact@v4
-        with:
-          name: v010-package-lock
-          path: package-lock.json
       - run: npm ci --no-audit --no-fund
       - run: npm test
       - run: node --check server.js
