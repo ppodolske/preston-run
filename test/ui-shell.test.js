@@ -4,6 +4,16 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { renderShell } = require('../src/ui/shell');
 
+function assertSettingsMenu(html) {
+  assert.match(html, /<details class="settings-menu"/);
+  assert.match(html, /<summary[^>]*>☰ Settings<\/summary>/);
+  assert.match(html, /href="\/notifications"/);
+  assert.match(html, /href="\/settings\/calendars"/);
+  assert.match(html, /href="\/me\/settings\/gmail"/);
+  assert.match(html, /<form method="post" action="\/auth\/logout"/);
+  assert.match(html, />Log out<\/button>/);
+}
+
 function assertSharedShell(html) {
   assert.match(html, /href="\/preston\.css"/);
   assert.match(html, /class="site-header"/);
@@ -11,6 +21,7 @@ function assertSharedShell(html) {
   assert.match(html, /class="site-footer"/);
   assert.match(html, /<a class="skip-link" href="#main-content">Skip to content<\/a>/);
   assert.match(html, /<main id="main-content" class="site-main/);
+  assertSettingsMenu(html);
 }
 
 test('renderShell emits the shared preston.ai document structure', () => {
