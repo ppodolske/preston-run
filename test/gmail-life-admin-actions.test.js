@@ -10,7 +10,7 @@ const {buildGmailLifeAdminActions}=require('../src/services/gmail-life-admin-act
   const reviewData={createGmailReviewLink:async(_db,userId,input)=>{calls.push(['reviewLink',userId,input]);return {id:'review-link-1',...input};}};
   const actions=buildGmailLifeAdminActions({supabase:{},userId:'user1',lifeAdminData,gmailData,reviewData});
 
-  const source={id:'src1',gmail_message_id:'m1',source_link:'https://mail.google.com/mail/u/0/#all/m1',sender:'Physio <noreply@nookal.com>',subject:'Booking Confirmation - Physiotherapy'};
+  const source={id:'src1',gmail_message_id:'m1',gmail_thread_id:'thread1',source_link:'https://mail.google.com/mail/u/0/#all/m1',sender:'Physio <noreply@nookal.com>',subject:'Booking Confirmation - Physiotherapy'};
   const candidate={title:'Physiotherapy appointment',category:'appointment',status:'upcoming',due_at:null,starts_at:null,recurrence_rule:null,priority:'normal',notes:'From Gmail.',linked_person_id:null};
   const created=await actions.createLifeAdminItem(source,candidate,{reason:'health_appointment'});
   assert.equal(created.id,'life1');
@@ -18,10 +18,11 @@ const {buildGmailLifeAdminActions}=require('../src/services/gmail-life-admin-act
   assert.equal(createCall[3].source,'gmail');
   assert.equal(createCall[3].source_record_id,'src1');
   assert.equal(createCall[3].gmail_message_id,'m1');
+  assert.equal(createCall[3].gmail_thread_id,'thread1');
   assert.equal(createCall[3].classification_reason,'health_appointment');
   assert.equal(calls.some(c=>c[0]==='activity'&&c[2].entityType==='life_item'&&c[2].entityId==='life1'&&c[2].action==='create'),true);
 
-  const review=await actions.createReviewItem({id:'src2',gmail_message_id:'m2',source_link:'https://mail.google.com/m2',sender:'Uber <no-reply@uber.com>',subject:'Reservation confirmed for Sunday 5 July'},{reason:'ambiguous_booking'});
+  const review=await actions.createReviewItem({id:'src2',gmail_message_id:'m2',gmail_thread_id:'thread2',source_link:'https://mail.google.com/m2',sender:'Uber <no-reply@uber.com>',subject:'Reservation confirmed for Sunday 5 July'},{reason:'ambiguous_booking'});
   assert.equal(review.id,'life1');
   const reviewCreate=calls.filter(c=>c[0]==='createLifeItem').at(-1);
   assert.equal(reviewCreate[2].category,'other');
@@ -29,6 +30,21 @@ const {buildGmailLifeAdminActions}=require('../src/services/gmail-life-admin-act
   assert.match(reviewCreate[2].title,/Review Gmail/i);
   assert.equal(calls.some(c=>c[0]==='reviewLink'&&c[2].sourceRecordId==='src2'&&c[2].reviewItemId==='life1'&&c[2].reviewType==='ambiguous_booking'),true);
   assert.equal(calls.some(c=>c[0]==='activity'&&c[2].entityType==='gmail_review'&&c[2].entityId==='life1'&&c[2].action==='create'),true);
+
+  const duplicateCalls=[];
+  const duplicateActions=buildGmailLifeAdminActions({
+    supabase:{},userId:'user1',
+    lifeAdminData:{
+      ensureGmailLifeItem:async()=>({item:{id:'existing-life'},created:false}),
+      createGmailLifeItem:async()=>assert.fail('existing Gmail thread must not insert another Life Admin item')
+    },
+    gmailData:{recordGmailActivity:async()=>duplicateCalls.push('activity')},
+    reviewData:{createGmailReviewLink:async()=>duplicateCalls.push('reviewLink')}
+  });
+  const duplicateSource={id:'src3',gmail_message_id:'m3',gmail_thread_id:'thread1',source_link:'https://mail.google.com/m3',sender:'Physio',subject:'Reminder: appointment'};
+  assert.equal((await duplicateActions.createLifeAdminItem(duplicateSource,candidate,{reason:'health_appointment'})).id,'existing-life');
+  assert.equal((await duplicateActions.createReviewItem(duplicateSource,{reason:'ambiguous_booking'})).id,'existing-life');
+  assert.deepEqual(duplicateCalls,[],'idempotent reprocessing must not duplicate activity or review links');
 
   console.log('gmail Life Admin action tests passed');
 })().catch(e=>{console.error(e);process.exit(1)});
