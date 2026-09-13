@@ -7,6 +7,7 @@ const {createGmailProvider}=require('./gmail-provider');
 const {runGmailScan}=require('./gmail-scan-runner');
 const {buildGmailTripActions}=require('./gmail-trip-actions');
 const {buildGmailLifeAdminActions}=require('./gmail-life-admin-actions');
+const {resolveGmailAccessToken}=require('./gmail-access-token');
 
 function normalizeDecryptedAccessToken(value){
   if(typeof value==='string')return value;
@@ -43,11 +44,20 @@ async function startManualGmailScan(supabase,userId,config,options={}){
   const getConnection=options.getGmailConnection||getGmailConnection;
   const connection=await getConnection(supabase,userId);
   if(!connection||connection.status==='disconnected')throw new Error('No connected Gmail account');
-  if(!connection.access_token_ciphertext)throw new Error('Connected Gmail account is missing access token');
-  const decrypt=options.decryptCredential||decryptCredential;
-  const key=keyFor(config,options);
-  const tokenPayload=decrypt(connection.access_token_ciphertext,key);
-  const accessToken=normalizeDecryptedAccessToken(tokenPayload);
+  if(!connection.access_token_ciphertext&&!connection.refresh_token_ciphertext)throw new Error('Connected Gmail account is missing access token');
+  const resolver=options.resolveGmailAccessToken||resolveGmailAccessToken;
+  const accessToken=await resolver({
+    supabase,
+    userId,
+    connection,
+    config,
+    credentialKey:keyFor(config,options),
+    decryptCredential:options.decryptCredential,
+    refreshGmailAccessToken:options.refreshGmailAccessToken,
+    encryptCredential:options.encryptCredential,
+    updateGmailAccessToken:options.updateGmailAccessToken,
+    fetchImpl:options.fetch||global.fetch
+  });
   const providerFactory=options.createGmailProvider||createGmailProvider;
   const provider=providerFactory({fetch:options.fetch||global.fetch,accessToken});
   const tripLister=options.listTrips||listTrips;
