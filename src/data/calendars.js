@@ -52,6 +52,14 @@ async function upsertCalendarEvents(supabase,userId,connectionId,sourceId,events
 async function listCalendarEventsForDigest(supabase,userId){
   requireUserId(userId);const r=await supabase.from('calendar_events').select(EVENT_COLUMNS).eq('user_id',userId).order('starts_at',{ascending:true,nullsFirst:true});return throwIf(r)||[];
 }
+async function listCalendarDashboardData(supabase,userId){
+  requireUserId(userId);
+  const [events,sources]=await Promise.all([
+    supabase.from('calendar_events').select(EVENT_COLUMNS).eq('user_id',userId),
+    supabase.from('calendar_sources').select(SOURCE_COLUMNS).eq('user_id',userId).eq('selected',true)
+  ]);
+  return{events:throwIf(events)||[],sources:throwIf(sources)||[]};
+}
 async function deleteEventsForSource(supabase,userId,sourceId){
   requireUserId(userId);const r=await supabase.from('calendar_events').delete().eq('user_id',userId).eq('calendar_source_id',sourceId).select('id');return throwIf(r)||[];
 }
@@ -63,4 +71,4 @@ async function deleteEventsOutsideWindow(supabase,userId,startDate,endDate){
   const r=await supabase.from('calendar_events').delete().eq('user_id',userId).or(filter).select('id');return throwIf(r)||[];
 }
 
-module.exports={getCalendarConnection,getCalendarConnectionWithCredential,listCalendarConnections,upsertCalendarConnection,updateCalendarSyncState,deleteCalendarConnection,listCalendarSources,replaceDiscoveredCalendarSources,setCalendarSourceSelected,listSelectedCalendarSources,upsertCalendarEvents,listCalendarEventsForDigest,deleteEventsForSource,deleteUnseenEventsForSource,deleteEventsOutsideWindow};
+module.exports={getCalendarConnection,getCalendarConnectionWithCredential,listCalendarConnections,upsertCalendarConnection,updateCalendarSyncState,deleteCalendarConnection,listCalendarSources,replaceDiscoveredCalendarSources,setCalendarSourceSelected,listSelectedCalendarSources,upsertCalendarEvents,listCalendarEventsForDigest,listCalendarDashboardData,deleteEventsForSource,deleteUnseenEventsForSource,deleteEventsOutsideWindow};
