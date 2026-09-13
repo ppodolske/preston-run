@@ -149,7 +149,8 @@ function buildCalendarMonth({events=[],sources=[],monthKey,now=new Date()}={}){
     }
     const start=new Date(event.starts_at).getTime(),end=new Date(event.ends_at).getTime();
     if(!Number.isFinite(start)||!Number.isFinite(end)||end<monthStart||start>monthEnd)continue;
-    const key=dateKey(localParts(new Date(event.starts_at),SYDNEY_TZ));
+    const startKey=dateKey(localParts(new Date(event.starts_at),SYDNEY_TZ));
+    const key=startKey<window.firstDate?window.firstDate:startKey;
     if(days[key])days[key].push(item);
   }
   for(const list of Object.values(days))list.sort((a,b)=>{if(a.allDay!==b.allDay)return a.allDay?-1:1;const at=a.startsAt?new Date(a.startsAt).getTime():0,bt=b.startsAt?new Date(b.startsAt).getTime():0;return at-bt||String(a.title).localeCompare(String(b.title));});
