@@ -20,6 +20,7 @@ const sources=[
 ];
 const events=[
   {id:'timed',calendar_source_id:'personal',title:'Dinner',all_day:false,starts_at:'2026-09-15T08:00:00Z',ends_at:'2026-09-15T09:00:00Z',status:'confirmed',owner_response:'accepted',external_url:'https://calendar.example/timed',location:'Sydney'},
+  {id:'timed-span-start',calendar_source_id:'personal',title:'Overnight into September',all_day:false,starts_at:'2026-08-31T13:30:00Z',ends_at:'2026-08-31T15:00:00Z',status:'confirmed',owner_response:'accepted'},
   {id:'all-day',calendar_source_id:'holidays',title:'Holiday',all_day:true,start_date:'2026-09-20',end_date:'2026-09-21',status:'confirmed',owner_response:'unknown'},
   {id:'span-start',calendar_source_id:'personal',title:'Month opening trip',all_day:true,start_date:'2026-08-30',end_date:'2026-09-03',status:'confirmed',owner_response:'accepted'},
   {id:'span-end',calendar_source_id:'personal',title:'Month closing trip',all_day:true,start_date:'2026-09-29',end_date:'2026-10-03',status:'confirmed',owner_response:'accepted'},
@@ -31,6 +32,7 @@ const events=[
 const month=buildCalendarMonth({events,sources,monthKey:'2026-09',now:new Date('2026-09-12T22:00:00Z')});
 assert.equal(month.monthKey,'2026-09');
 assert.equal(month.days['2026-09-15'].some(x=>x.id==='timed'),true,'timed event appears on Sydney-local start date');
+assert.equal(month.days['2026-09-01'].some(x=>x.id==='timed-span-start'),true,'timed event overlapping month start appears on first visible day');
 assert.equal(month.days['2026-09-20'].some(x=>x.id==='all-day'),true,'all-day event appears');
 assert.deepEqual(['2026-09-01','2026-09-02'].map(k=>month.days[k].some(x=>x.id==='span-start')),[true,true],'event spanning month start projects onto visible days');
 assert.deepEqual(['2026-09-29','2026-09-30'].map(k=>month.days[k].some(x=>x.id==='span-end')),[true,true],'event spanning month end projects onto visible days');
