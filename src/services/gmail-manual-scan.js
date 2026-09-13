@@ -26,7 +26,7 @@ function createGmailPersistenceAdapters(bound={}){
   const connection=bound.connection;
   return {
     startScan:startGmailScanRun,
-    updateProgress:updateGmailScanProgress,
+    updateScanProgress:async(scanRunId,patch)=>updateGmailScanProgress(supabase,userId,scanRunId,patch),
     finishScan:finishGmailScanRun,
     failScan:failGmailScanRun,
     findExistingSource:async(accountEmail,messageId)=>findGmailSourceRecord(supabase,userId,accountEmail,messageId),
