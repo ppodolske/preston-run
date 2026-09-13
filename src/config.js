@@ -16,6 +16,9 @@ function loadConfig(env = process.env) {
     supabasePublishableKey: required(env, 'SUPABASE_PUBLISHABLE_KEY'),
     ownerGoogleEmail: required(env, 'OWNER_GOOGLE_EMAIL').trim().toLowerCase(),
     vapidPublicKey: required(env, 'VAPID_PUBLIC_KEY'),
+    googleCalendarClientId: required(env, 'GOOGLE_CALENDAR_CLIENT_ID'),
+    googleCalendarClientSecret: required(env, 'GOOGLE_CALENDAR_CLIENT_SECRET'),
+    calendarCredentialKey: required(env, 'CALENDAR_CREDENTIAL_KEY'),
     isProduction: (env.NODE_ENV || 'development') === 'production'
   };
 }
