@@ -6,7 +6,6 @@ const key=Buffer.alloc(32,7).toString('base64url');
 const config={
   siteUrl:'https://preston.run',
   supabaseUrl:'https://example.supabase.co',
-  supabaseServiceRoleKey:'service-role-key',
   calendarCredentialKey:key,
   gmail:{clientId:'client1',clientSecret:'secret1',redirectUri:'https://preston.run/me/settings/gmail/callback',scannerVersion:'scanner1',parserVersion:'parser1',initialLookbackMonths:12}
 };
@@ -26,6 +25,7 @@ assert.match(encrypted,/^v1\./);
   let capturedScanDb=null;
   let capturedUserId=null;
   const backgroundDeps=createGmailDeps(config,{
+    supabaseServiceRoleKey:'service-role-key',
     createBackgroundSupabaseClient:args=>{factoryArgs=args;return backgroundDb;},
     startManualGmailScan:async(db,userId)=>{capturedScanDb=db;capturedUserId=userId;return {status:'succeeded'};}
   });
@@ -34,6 +34,7 @@ assert.match(encrypted,/^v1\./);
   assert.equal(capturedScanDb,backgroundDb,'detached Gmail scan must not keep using the request-scoped Supabase client after the HTTP response ends');
   assert.equal(capturedUserId,'user1');
   assert.deepEqual(factoryArgs,{supabaseUrl:'https://example.supabase.co',serviceRoleKey:'service-role-key'});
+  assert.equal(Object.hasOwn(backgroundDeps,'supabaseServiceRoleKey'),false,'service-role secret must not be exposed through Gmail route dependencies');
 
   let capturedContext=null;
   const app=createApp(config,{
