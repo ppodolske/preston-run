@@ -18,15 +18,17 @@ function payload(input = {}) {
 }
 
 function gmailSourceMetadata(input={}){
-  return {
+  const metadata={
     source:'gmail',
     source_record_id:optionalText(input.source_record_id),
     gmail_message_id:optionalText(input.gmail_message_id),
-    gmail_thread_id:optionalText(input.gmail_thread_id),
     source_link:optionalText(input.source_link),
     sender:optionalText(input.sender),
     classification_reason:optionalText(input.classification_reason)
   };
+  const threadId=optionalText(input.gmail_thread_id);
+  if(threadId)metadata.gmail_thread_id=threadId;
+  return metadata;
 }
 
 async function listLifeItems(supabase) {
