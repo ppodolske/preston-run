@@ -60,6 +60,9 @@ async function listCalendarDashboardData(supabase,userId){
   ]);
   return{events:throwIf(events)||[],sources:throwIf(sources)||[]};
 }
+async function listCalendarViewData(supabase,userId){
+  return listCalendarDashboardData(supabase,userId);
+}
 async function deleteEventsForSource(supabase,userId,sourceId){
   requireUserId(userId);const r=await supabase.from('calendar_events').delete().eq('user_id',userId).eq('calendar_source_id',sourceId).select('id');return throwIf(r)||[];
 }
@@ -71,4 +74,4 @@ async function deleteEventsOutsideWindow(supabase,userId,startDate,endDate){
   const r=await supabase.from('calendar_events').delete().eq('user_id',userId).or(filter).select('id');return throwIf(r)||[];
 }
 
-module.exports={getCalendarConnection,getCalendarConnectionWithCredential,listCalendarConnections,upsertCalendarConnection,updateCalendarSyncState,deleteCalendarConnection,listCalendarSources,replaceDiscoveredCalendarSources,setCalendarSourceSelected,listSelectedCalendarSources,upsertCalendarEvents,listCalendarEventsForDigest,listCalendarDashboardData,deleteEventsForSource,deleteUnseenEventsForSource,deleteEventsOutsideWindow};
+module.exports={getCalendarConnection,getCalendarConnectionWithCredential,listCalendarConnections,upsertCalendarConnection,updateCalendarSyncState,deleteCalendarConnection,listCalendarSources,replaceDiscoveredCalendarSources,setCalendarSourceSelected,listSelectedCalendarSources,upsertCalendarEvents,listCalendarEventsForDigest,listCalendarDashboardData,listCalendarViewData,deleteEventsForSource,deleteUnseenEventsForSource,deleteEventsOutsideWindow};
