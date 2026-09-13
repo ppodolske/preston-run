@@ -7,6 +7,7 @@ function sourceMetadata(source={},classification={}){
     source:'gmail',
     source_record_id:source.id||null,
     gmail_message_id:source.gmail_message_id||null,
+    gmail_thread_id:source.gmail_thread_id||null,
     source_link:source.source_link||null,
     sender:source.sender||null,
     classification_reason:classification.reason||null
@@ -29,19 +30,27 @@ function reviewInput(source={},classification={}){
   };
 }
 
-function buildGmailLifeAdminActions({supabase,userId,lifeAdminData=lifeAdminDefault,gmailData={recordGmailActivity},reviewData=reviewDefault,ruleVersion='gmail-life-admin-actions-v0.12.1'}={}){
+async function ensureItem(lifeAdminData,supabase,user,input,metadata){
+  if(typeof lifeAdminData.ensureGmailLifeItem==='function')return lifeAdminData.ensureGmailLifeItem(supabase,user,input,metadata);
+  return {item:await lifeAdminData.createGmailLifeItem(supabase,user,input,metadata),created:true};
+}
+
+function buildGmailLifeAdminActions({supabase,userId,lifeAdminData=lifeAdminDefault,gmailData={recordGmailActivity},reviewData=reviewDefault,ruleVersion='gmail-life-admin-actions-v0.12.2'}={}){
   const user={id:userId};
   return {
     async createLifeAdminItem(source,candidate,classification={}){
-      const item=await lifeAdminData.createGmailLifeItem(supabase,user,candidate,sourceMetadata(source,classification));
-      if(gmailData&&typeof gmailData.recordGmailActivity==='function'){
+      const ensured=await ensureItem(lifeAdminData,supabase,user,candidate,sourceMetadata(source,classification));
+      const item=ensured.item;
+      if(ensured.created&&gmailData&&typeof gmailData.recordGmailActivity==='function'){
         await gmailData.recordGmailActivity(supabase,userId,{sourceRecordId:source.id,entityType:'life_item',entityId:item&&item.id,action:'create',oldValue:null,newValue:item,ruleVersion});
       }
       return item;
     },
     async createReviewItem(source,classification={}){
       const input=reviewInput(source,classification);
-      const item=await lifeAdminData.createGmailLifeItem(supabase,user,input,sourceMetadata(source,classification));
+      const ensured=await ensureItem(lifeAdminData,supabase,user,input,sourceMetadata(source,classification));
+      const item=ensured.item;
+      if(!ensured.created)return item;
       if(reviewData&&typeof reviewData.createGmailReviewLink==='function'){
         await reviewData.createGmailReviewLink(supabase,userId,{
           sourceRecordId:source.id,
@@ -59,4 +68,4 @@ function buildGmailLifeAdminActions({supabase,userId,lifeAdminData=lifeAdminDefa
   };
 }
 
-module.exports={buildGmailLifeAdminActions,sourceMetadata,reviewInput};
+module.exports={buildGmailLifeAdminActions,sourceMetadata,reviewInput,ensureItem};
