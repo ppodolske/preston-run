@@ -10,6 +10,7 @@ const html=renderLifeAdminPage({lifeItems:items,tasks,people,filter:'renewal',ne
 for(const text of ['Life Admin','Needs Attention','Coming Up','Renewals','Add item','Add task','Licence &lt;renewal&gt;','Pay &amp; submit','Alice &lt;Friend&gt;','Overdue','Urgent'])assert.ok(html.includes(text),`missing ${text}`);
 assert.ok(!html.includes('ppodolske@gmail.com'));
 const detail=renderLifeItemPage({item:items[0],linkedTasks:tasks,person:people[0]});assert.match(detail,/Upload form/);assert.match(detail,/Add task/);assert.match(detail,/Edit item/);
-const form=renderLifeItemFormPage({item:items[0],people,mode:'edit',error:'Bad date'});assert.match(form,/action="\/life-admin\/l1"/);assert.match(form,/value="2026-09-12"/);assert.match(form,/Bad date/);
+const form=renderLifeItemFormPage({item:items[0],people,mode:'edit',error:'Bad date',reminderSettings:{renewal_offsets:[60,30,14,7,1]},reminderOverride:null});assert.match(form,/action="\/life-admin\/l1"/);assert.match(form,/value="2026-09-12"/);assert.match(form,/Bad date/);assert.match(form,/Use global defaults/);assert.match(form,/Custom reminders/);assert.match(form,/60, 30, 14, 7, 1/);
+const custom=renderLifeItemFormPage({item:items[0],people,mode:'edit',reminderSettings:{renewal_offsets:[60,30,14,7,1]},reminderOverride:{enabled:true,offsets:[21,5]}});assert.match(custom,/21, 5/);assert.match(custom,/Restore defaults/);
 const taskForm=renderTaskFormPage({task:tasks[0],lifeItems:items,people,trips,mode:'edit'});assert.match(taskForm,/action="\/tasks\/t1"/);assert.match(taskForm,/value="l1" selected/);assert.match(taskForm,/name="linked_trip_id"/);assert.match(taskForm,/value="trip1" selected/);assert.match(taskForm,/Chicago &amp; Milwaukee/);
 console.log('Life Admin page tests passed');
