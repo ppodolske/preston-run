@@ -2,7 +2,7 @@ const assert=require('node:assert/strict');
 const {
   getCalendarConnection,getCalendarConnectionWithCredential,listCalendarConnections,upsertCalendarConnection,updateCalendarSyncState,deleteCalendarConnection,
   listCalendarSources,replaceDiscoveredCalendarSources,setCalendarSourceSelected,listSelectedCalendarSources,
-  upsertCalendarEvents,listCalendarEventsForDigest,deleteEventsForSource,deleteUnseenEventsForSource,deleteEventsOutsideWindow
+  upsertCalendarEvents,listCalendarEventsForDigest,listCalendarDashboardData,deleteEventsForSource,deleteUnseenEventsForSource,deleteEventsOutsideWindow
 }=require('../src/data/calendars');
 
 function builder({rows=[],singleRow=null}={}){
@@ -46,6 +46,13 @@ function ownerFiltered(b){return has(b,'eq','user_id','u1');}
   const eventUpsert=events.calls.find(x=>x[0]==='upsert');assert.equal(eventUpsert[2].onConflict,'user_id,calendar_source_id,occurrence_key');assert.equal(eventUpsert[1][0].user_id,'u1');assert.equal(eventUpsert[1][0].connection_id,'c1');assert.equal(eventUpsert[1][0].calendar_source_id,'s1');assert.equal(eventUpsert[1][0].sync_seen_at,'2026-09-13T05:00:00Z');
 
   b=builder({rows:[]});s={from:()=>b};await listCalendarEventsForDigest(s,'u1');assert.equal(ownerFiltered(b),true);
+
+  const dashboardEvents=builder({rows:[{id:'e1'}]}),dashboardSources=builder({rows:[{id:'s1',selected:true}]});
+  s={from:t=>t==='calendar_events'?dashboardEvents:dashboardSources};
+  const dashboardData=await listCalendarDashboardData(s,'u1');
+  assert.deepEqual(dashboardData,{events:[{id:'e1'}],sources:[{id:'s1',selected:true}]});
+  assert.equal(ownerFiltered(dashboardEvents),true);assert.equal(ownerFiltered(dashboardSources),true);assert.ok(has(dashboardSources,'eq','selected',true));
+
   b=builder({rows:[]});s={from:()=>b};await deleteEventsForSource(s,'u1','s1');assert.equal(ownerFiltered(b),true);assert.ok(has(b,'eq','calendar_source_id','s1'));
   b=builder({rows:[]});s={from:()=>b};await deleteUnseenEventsForSource(s,'u1','s1','2026-09-13T05:00:00Z');assert.equal(ownerFiltered(b),true);assert.ok(has(b,'eq','calendar_source_id','s1'));assert.ok(has(b,'lt','sync_seen_at','2026-09-13T05:00:00Z'));
   b=builder({rows:[]});s={from:()=>b};await deleteEventsOutsideWindow(s,'u1','2026-08-14','2027-09-13');assert.equal(ownerFiltered(b),true);assert.ok(b.calls.some(x=>x[0]==='or'),'window cleanup must remain one owner-scoped delete');
