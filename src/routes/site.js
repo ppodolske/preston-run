@@ -5,8 +5,10 @@ const { getAuthorizedOwner } = require('../auth/guard');
 const { listPeople } = require('../data/people');
 const { listLifeItems } = require('../data/life-admin');
 const { listTasks } = require('../data/tasks');
+const { listTrips } = require('../data/trips');
 const { getUpcomingBirthdays, todayInTimeZone } = require('../domain/birthdays');
 const { getComingUpLifeItems, getNeedsAttention } = require('../domain/life-admin');
+const { getUpcomingTrips } = require('../domain/trips');
 const { APPS, VERSION } = require('../branding');
 
 async function probe(url) {
@@ -49,6 +51,8 @@ async function handleSiteRoute(req, res, context) {
       let upcomingLifeItems = [];
       let needsAttention = [];
       let lifeAdminDataUnavailable = false;
+      let upcomingTrips = [];
+      let tripDataUnavailable = false;
       try {
         const people = await listPeople(supabase);
         upcomingBirthdays = getUpcomingBirthdays(people, todayInTimeZone('Australia/Sydney'), 90);
@@ -63,7 +67,13 @@ async function handleSiteRoute(req, res, context) {
       } catch {
         lifeAdminDataUnavailable = true;
       }
-      html(res, 200, renderHomePage({ user:auth.user, upcomingBirthdays, birthdayDataUnavailable, upcomingLifeItems, needsAttention, lifeAdminDataUnavailable }), { 'cache-control':'private, no-store' });
+      try {
+        const trips = await listTrips(supabase, auth.user);
+        upcomingTrips = getUpcomingTrips(trips, new Date(), 180);
+      } catch {
+        tripDataUnavailable = true;
+      }
+      html(res, 200, renderHomePage({ user:auth.user, upcomingBirthdays, birthdayDataUnavailable, upcomingLifeItems, needsAttention, lifeAdminDataUnavailable, upcomingTrips, tripDataUnavailable }), { 'cache-control':'private, no-store' });
       return true;
     }
     if (auth.reason === 'not_owner') {
