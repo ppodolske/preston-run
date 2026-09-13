@@ -18,9 +18,16 @@ const { upsertGmailConnection, getGmailConnection, markGmailDisconnected } = req
 const { encryptCredential, decodeCredentialKey } = require('./security/credential-crypto');
 
 function createGmailDeps(config, overrides = {}) {
+  const {
+    createBackgroundSupabaseClient: backgroundFactoryOverride,
+    startManualGmailScan: scanStarterOverride,
+    supabaseServiceRoleKey: serviceRoleKeyOverride,
+    ...publicOverrides
+  } = overrides;
   const key = () => decodeCredentialKey(config.calendarCredentialKey);
-  const backgroundFactory = overrides.createBackgroundSupabaseClient || createBackgroundSupabaseClient;
-  const scanStarter = overrides.startManualGmailScan || startManualGmailScan;
+  const backgroundFactory = backgroundFactoryOverride || createBackgroundSupabaseClient;
+  const scanStarter = scanStarterOverride || startManualGmailScan;
+  const serviceRoleKey = String(serviceRoleKeyOverride || process.env.SUPABASE_SERVICE_ROLE_KEY || '');
   const productionDeps = {
     googleOAuth: createGmailOAuth(config),
     getGmailConnection,
@@ -29,12 +36,12 @@ function createGmailDeps(config, overrides = {}) {
     encryptAccessToken(value) { return encryptCredential({ accessToken:value }, key()); },
     encryptRefreshToken(value) { return encryptCredential({ refreshToken:value }, key()); },
     startScanNow(_requestSupabase, userId) {
-      if (!config.supabaseServiceRoleKey) throw new Error('SUPABASE_SERVICE_ROLE_KEY is required for Gmail background scans');
-      const backgroundSupabase = backgroundFactory({ supabaseUrl:config.supabaseUrl, serviceRoleKey:config.supabaseServiceRoleKey });
+      if (!serviceRoleKey) throw new Error('SUPABASE_SERVICE_ROLE_KEY is required for Gmail background scans');
+      const backgroundSupabase = backgroundFactory({ supabaseUrl:config.supabaseUrl, serviceRoleKey });
       return scanStarter(backgroundSupabase, userId, config);
     }
   };
-  return { ...productionDeps, ...overrides };
+  return { ...productionDeps, ...publicOverrides };
 }
 
 function createApp(config, dependencies = {}) {
