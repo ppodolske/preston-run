@@ -114,6 +114,16 @@ async function runWithActions(actions,existingTrips=[{id:'trip1',bookingReferenc
   assert.equal(duplicate.status,'succeeded');
   assert.deepEqual(duplicateProcessed,[]);
 
+  const sourceStatusCalls=[];
+  const statusResult=await runGmailScan({
+    supabase:{},userId:'user1',connection:{id:'conn1',gmail_account_email:'me@example.com',first_scan_completed_at:null},provider:baseProvider(),
+    config:{scannerVersion:'scanner1',parserVersion:'parser1',initialLookbackMonths:12},existingTrips:[],
+    persistence:{...basePersistence([]),updateSourceStatus:async(sourceId,patch)=>{sourceStatusCalls.push({sourceId,patch});}},
+    actions:{applyCreateTripFromGmail:async()=>{}}
+  });
+  assert.equal(statusResult.status,'succeeded');
+  assert.deepEqual(sourceStatusCalls,[{sourceId:'src1',patch:{processing_status:'processed',processing_reason:null}}], 'successfully handled Gmail source must be marked processed so a retry does not replay side effects');
+
   const attachmentCalls=[];
   const pdfFacts=[];
   const pdf=await runGmailScan({
