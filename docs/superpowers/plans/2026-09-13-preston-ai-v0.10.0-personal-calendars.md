@@ -17,19 +17,19 @@
 - Runtime remains Node `>=22`.
 - Support exactly one Google Calendar connection and one Apple/iCloud Calendar connection per owner in this release.
 - Calendar authorization is separate from Preston Google login authorization.
-- Google access is read-only and uses only calendar-list/event read scopes; no Calendar write scope is permitted.
+- Google access is read-only. The allowed OAuth scopes are exactly `https://www.googleapis.com/auth/calendar.calendarlist.readonly` and `https://www.googleapis.com/auth/calendar.events.readonly`; no Calendar write scope or Google profile scope is permitted.
 - Apple access uses the Apple ID email plus an app-specific password over CalDAV; Preston never asks for the normal Apple Account password.
 - Every discovered calendar defaults unselected. Only explicit owner opt-in makes a calendar eligible for sync/digest use.
 - Work calendars are never inferred or automatically selected.
 - Retained calendar cache window is 30 days back through 12 months forward.
 - Stored event data is minimal: identifiers/provenance, title, timing/all-day semantics, location, status/response, recurrence identity, external link, and sync/version metadata. Do not store attendee lists or full descriptions/notes.
 - Calendar events appear only in the 07:05 Morning Summary in v0.10.0. Do not add them to the home dashboard or noon/18:00 urgent paths.
-- Digest inclusion is start of today through exactly 09:00:00 tomorrow in Australia/Sydney, plus tomorrow's all-day events.
+- Digest timed-event inclusion is any event overlapping the interval from Sydney start-of-today through a start-time boundary of exactly 09:00:00 tomorrow: an event is eligible when it has not ended before today starts and its start is at or before the cutoff. This retains overnight/in-progress events and includes events starting exactly at 09:00. Tomorrow's all-day events are also included.
 - Cancelled and reliably owner-declined events are excluded. Tentative events remain and are labelled tentative.
 - Scheduled sync runs once at 06:55 Australia/Sydney using dual UTC cron slots plus an exact local-time gate. No continuous polling.
 - Manual `Sync calendars` invokes the exact same sync orchestration used by the scheduled worker.
 - Calendar provider failures are isolated. One provider failure does not prevent the other provider from syncing or the Morning Summary from running.
-- Calendar source data older than 24 hours since its connection's last successful sync is stale and must not be presented as current; show `Calendar sync needs attention` when applicable.
+- Calendar source data older than 24 hours since its connection's last successful sync is stale and must not be presented as current; show `Calendar sync needs attention` when stale cached data would otherwise contribute to the digest.
 - Provider credentials are encrypted before persistence with a separate server-only `CALENDAR_CREDENTIAL_KEY`. Database access alone must not reveal usable provider credentials.
 - The production/UAT web service may receive calendar-specific OAuth/credential-encryption secrets required for connection flows, but must never receive `SUPABASE_SERVICE_ROLE_KEY` or `VAPID_PRIVATE_KEY`.
 - The private calendar-sync worker may receive service-role access and calendar secrets required for background sync.
@@ -53,8 +53,8 @@ New focused modules:
 - `src/jobs/calendar-sync.js` — Railway CLI job with 06:55 Sydney gate.
 - `src/pages/calendars.js` — Settings → Calendars owner UI.
 - `src/routes/calendars.js` — Google OAuth, Apple connection, selection, manual sync, disconnect routes.
-- `supabase/migrations/<timestamp>_v0100_calendars.sql` — calendar tables, constraints, indexes, RLS.
-- `supabase/migrations/<timestamp>_v0100_restrict_calendar_privileges.sql` — explicit privilege hardening.
+- `supabase/migrations/20260913050000_v0100_calendars.sql` — calendar tables, constraints, indexes, RLS.
+- `supabase/migrations/20260913050100_v0100_restrict_calendar_privileges.sql` — explicit privilege hardening.
 
 Existing modules modified:
 
@@ -62,7 +62,6 @@ Existing modules modified:
 - `src/app.js` — calendar route wiring.
 - `src/pages/home.js` — authenticated navigation link to Calendars only; no event display.
 - `src/services/reminder-engine.js` — combine existing reminder items with normalized Calendar digest content in morning only.
-- `src/jobs/reminders.js` — no provider access; only receives calendar content indirectly through the updated reminder engine/data layer.
 - `src/branding.js`, `package.json`, `package-lock.json`, `test.js`, `.github/workflows/ci.yml` — dependencies, version, scripts, test coverage.
 
 ---
@@ -71,8 +70,8 @@ Existing modules modified:
 
 **Files:**
 - Create: `test/calendars-migration.test.js`
-- Create: `supabase/migrations/<timestamp>_v0100_calendars.sql`
-- Create: `supabase/migrations/<timestamp>_v0100_restrict_calendar_privileges.sql`
+- Create: `supabase/migrations/20260913050000_v0100_calendars.sql`
+- Create: `supabase/migrations/20260913050100_v0100_restrict_calendar_privileges.sql`
 - Modify: `test.js`
 
 **Required schema:**
@@ -92,7 +91,9 @@ Existing modules modified:
 - `unique(user_id,provider)` and `unique(id,user_id)`
 
 `calendar_sources`
-- owner/connection IDs
+- `id uuid primary key default gen_random_uuid()`
+- `user_id uuid not null references auth.users(id) on delete cascade`
+- `connection_id uuid not null`
 - `provider_calendar_id text not null`
 - `display_name text not null`
 - optional `color text`
@@ -103,7 +104,10 @@ Existing modules modified:
 - composite FK `(connection_id,user_id)` → `calendar_connections(id,user_id)` on delete cascade
 
 `calendar_events`
-- owner/connection/source IDs
+- `id uuid primary key default gen_random_uuid()`
+- `user_id uuid not null references auth.users(id) on delete cascade`
+- `connection_id uuid not null`
+- `calendar_source_id uuid not null`
 - `provider_event_id text not null`
 - `occurrence_key text not null`
 - optional `series_id text`
@@ -117,12 +121,12 @@ Existing modules modified:
 - `sync_seen_at timestamptz not null`
 - timestamps
 - `unique(user_id,calendar_source_id,occurrence_key)`
-- composite owner-safe FKs to connection and source
-- checks requiring date fields for all-day rows and timestamp fields for timed rows
+- composite FK `(connection_id,user_id)` → connections and `(calendar_source_id,user_id)` → sources
+- checks requiring `start_date/end_date` and null timestamps for all-day rows, and `starts_at/ends_at` with null date fields for timed rows
 
 - [ ] **Step 1: Write the failing migration contract test.** Assert all three tables, RLS enablement, owner policies, uniqueness, composite owner foreign keys, default-off source selection, event timing checks, and the separate hardening migration.
 - [ ] **Step 2: Add `test/calendars-migration.test.js` to `test.js` and run `node test/calendars-migration.test.js`.** Expected: RED because migrations do not exist.
-- [ ] **Step 3: Create the schema migration.** Add indexes for `(user_id,provider)`, `(user_id,connection_id,selected)`, and event-window lookup by owner/source/date/time. Use `(select auth.uid()) = user_id` SELECT/INSERT/UPDATE/DELETE policies on all three tables.
+- [ ] **Step 3: Create the schema migration.** Add indexes for `(user_id,provider)`, `(user_id,connection_id,selected)`, timed event lookup by `(user_id,calendar_source_id,starts_at,ends_at)`, and all-day lookup by `(user_id,calendar_source_id,start_date,end_date)`. Use `(select auth.uid()) = user_id` SELECT/INSERT/UPDATE/DELETE policies on all three tables.
 - [ ] **Step 4: Create privilege hardening.** Revoke all from `anon` and `authenticated`, then grant only SELECT/INSERT/UPDATE/DELETE to `authenticated` for the three calendar tables.
 - [ ] **Step 5: Run `node test/calendars-migration.test.js && npm test`.** Expected: GREEN.
 - [ ] **Step 6: Apply migrations to connected Supabase and verify live RLS, policies, grants, indexes, constraints, and absence of anon grants.** Preserve the existing unrelated leaked-password advisor note rather than claiming the advisor is fully clean.
@@ -159,14 +163,18 @@ Existing modules modified:
 
 **Interfaces:**
 - `getCalendarSyncWindow(now)` → 30-day-back/12-month-forward bounded provider query window.
-- `getMorningCalendarWindow(now)` → Sydney start-of-today, inclusive next-day 09:00 timed cutoff, next-day date for all-day inclusion.
+- `getMorningCalendarWindow(now)` → Sydney start-of-today, inclusive next-day 09:00 timed start cutoff, current/next local date keys for all-day overlap.
 - `shouldRunCalendarSync(now)` → true only at 06:55 Australia/Sydney.
 - `normalizeCalendarEvent(input)` → validated provider-independent occurrence shape.
 - `isCalendarEventDigestEligible(event,window)`.
 - `sortCalendarDigestEvents(events,window)`.
 - `isConnectionStale(connection,now)` using strictly greater than 24 hours since `last_success_at`.
 
-- [ ] **Step 1: Write RED domain tests** covering AEST/AEDT 06:55 gates and inactive cron twins; 30-day/12-month range; non-Sydney event timezones; events crossing midnight; exact 09:00 tomorrow inclusion; 09:00:01 exclusion; today/tomorrow all-day semantics; cancelled/declined exclusion; tentative retention; stable ordering (today all-day → today timed → tomorrow all-day → tomorrow timed); and 24-hour stale boundary.
+**Timed overlap rule:** a non-cancelled/non-declined event is in the digest when `ends_at > startOfToday` (or equivalent instantaneous boundary handling) and `starts_at <= tomorrow09`. This includes an event that began yesterday but remains in progress today and an event starting exactly at 09:00 tomorrow. An event starting after 09:00 tomorrow is excluded even if it otherwise overlaps later.
+
+**All-day overlap rule:** include an all-day event for today when `start_date <= today < end_date`, and include it for tomorrow when `start_date <= tomorrow < end_date`. `end_date` remains provider-exclusive.
+
+- [ ] **Step 1: Write RED domain tests** covering AEST/AEDT 06:55 gates and inactive cron twins; 30-day/12-month range; non-Sydney event timezones; events crossing midnight; already-in-progress-at-midnight events; exact 09:00 tomorrow inclusion; 09:00:01 exclusion; today/tomorrow/multi-day all-day semantics; cancelled/declined exclusion; tentative retention; stable ordering (today all-day → today timed → tomorrow all-day → tomorrow timed); and 24-hour stale boundary.
 - [ ] **Step 2: Run `node test/calendars-domain.test.js`.** Expected: RED.
 - [ ] **Step 3: Implement using `Intl.DateTimeFormat` and explicit date-only handling.** Never convert an all-day provider date into midnight UTC as its canonical representation.
 - [ ] **Step 4: Run focused and full suite.** Expected: GREEN.
@@ -182,17 +190,18 @@ Existing modules modified:
 - Modify: `test.js`
 
 **Interfaces:**
-- Connections: `getCalendarConnection`, `listCalendarConnections`, `upsertCalendarConnection`, `updateCalendarSyncState`, `deleteCalendarConnection`.
+- Connections: `getCalendarConnection`, `getCalendarConnectionWithCredential`, `listCalendarConnections`, `upsertCalendarConnection`, `updateCalendarSyncState`, `deleteCalendarConnection`.
 - Sources: `listCalendarSources`, `replaceDiscoveredCalendarSources`, `setCalendarSourceSelected`, `listSelectedCalendarSources`.
 - Events: `upsertCalendarEvents`, `listCalendarEventsForDigest`, `deleteEventsForSource`, `deleteUnseenEventsForSource`, `deleteEventsOutsideWindow`.
 - Disconnect/deselection cleanup remains owner scoped.
 
 - [ ] **Step 1: Write fake-Supabase RED tests** proving every read/update/delete includes explicit `.eq('user_id', userId)`, creates inject owner IDs server-side, connection uniqueness is used correctly, discovered sources default selected=false, source rediscovery preserves an existing selected flag, event upsert uniqueness uses occurrence identity, and cleanup cannot cross connection/source ownership.
-- [ ] **Step 2: Test serialization boundaries.** Connection reads used by pages must select metadata fields explicitly and never return `credential_ciphertext` unless an internal credential-fetch function is called by the sync/connection service.
-- [ ] **Step 3: Run focused test and confirm RED.**
-- [ ] **Step 4: Implement the minimal data functions**, following existing explicit owner-filter conventions from `src/data/reminders.js` and `src/data/trips.js`.
-- [ ] **Step 5: Run focused and full suite.** Expected: GREEN.
-- [ ] **Step 6: Commit:** `feat: add calendar persistence layer`.
+- [ ] **Step 2: Test serialization boundaries.** `getCalendarConnection`/`listCalendarConnections` select metadata fields explicitly and never return `credential_ciphertext`; only `getCalendarConnectionWithCredential` may select it for an internal service call.
+- [ ] **Step 3: Define unseen cleanup deterministically.** A source sync captures a single ISO `syncMarker`; every row upserted in that source gets `sync_seen_at=syncMarker`; after successful source retrieval, delete owner/source rows inside the active cache window with `sync_seen_at < syncMarker`. Do not run unseen deletion after a failed/incomplete provider page sequence.
+- [ ] **Step 4: Run focused test and confirm RED.**
+- [ ] **Step 5: Implement the minimal data functions**, following existing explicit owner-filter conventions from `src/data/reminders.js` and `src/data/trips.js`.
+- [ ] **Step 6: Run focused and full suite.** Expected: GREEN.
+- [ ] **Step 7: Commit:** `feat: add calendar persistence layer`.
 
 ---
 
@@ -212,12 +221,13 @@ Existing modules modified:
 - `listEventOccurrences({calendarId,start,end,...})`
 
 **OAuth rules:**
-- Scopes are exactly the narrow read-only calendar-list and event scopes required by the implementation.
-- Request offline access for a refresh token.
+- Scopes are exactly `calendar.calendarlist.readonly` and `calendar.events.readonly` full Google scope URLs from Global Constraints.
+- Request `access_type=offline` and `prompt=consent` so a reconnect reliably yields refresh credentials.
 - No login/session OAuth behavior is reused or broadened.
 - Authorization callback URI is `${SITE_URL}/settings/calendars/google/callback`.
+- Derive the connected account label/external identity from primary Calendar metadata (for example the primary calendar ID) so no Google profile/userinfo scope is needed.
 
-- [ ] **Step 1: Write deterministic RED tests with injected `fetch`.** Verify authorization URL scopes/state/redirect, token exchange and refresh form bodies, calendar-list pagination, event pagination, `singleEvents=true` occurrence expansion, bounded `timeMin/timeMax`, and normalization of timed/all-day/tentative/cancelled/owner-response fields.
+- [ ] **Step 1: Write deterministic RED tests with injected `fetch`.** Verify authorization URL exact scopes/state/redirect/offline consent, token exchange and refresh form bodies, calendar-list pagination, event pagination, `singleEvents=true` occurrence expansion, bounded `timeMin/timeMax`, and normalization of timed/all-day/tentative/cancelled/owner-response fields.
 - [ ] **Step 2: Add tests that error messages are sanitized** and tokens/Authorization headers are not included in thrown/loggable messages.
 - [ ] **Step 3: Run focused test and confirm RED.**
 - [ ] **Step 4: Implement direct REST calls with built-in `fetch`; do not add the large `googleapis` SDK.** Keep raw provider parsing inside this module.
@@ -245,14 +255,14 @@ Existing modules modified:
 **CalDAV behavior:**
 - Start from `https://caldav.icloud.com/` and follow DAV current-user-principal/calendar-home-set discovery rather than hard-coding a per-user host/path.
 - Use HTTP Basic auth only server-side.
-- Request calendar-query `REPORT` with the bounded time range.
-- Request server-side calendar-data expansion for the bounded range where iCloud supports the CalDAV `expand` element, so Preston consumes occurrences rather than implementing its own recurrence engine.
-- Parse returned VEVENTs through `ical.js`, including RECURRENCE-ID exceptions, all-day values, STATUS, URL/location, and attendee participation only as needed to derive the owner's response; do not persist attendee lists.
+- Request calendar-query `REPORT` with the bounded time range and `calendar-data` expansion for that same range so the provider remains authoritative for recurring occurrences/exceptions.
+- Parse returned VEVENTs through `ical.js`, including `RECURRENCE-ID`, all-day values, STATUS, URL/location, and attendee participation only long enough to derive the owner's response; never return/persist attendee lists.
+- If iCloud rejects or fails to provide bounded recurrence expansion for a recurring series, surface a sanitized provider capability/sync error for that source in v0.10 rather than silently inventing a local recurrence approximation.
 
-- [ ] **Step 1: Write fixture-driven RED tests** for principal discovery, calendar-home discovery, multiple calendar listing, auth rejection, REPORT construction, multi-status XML, recurring master + expanded occurrences/exceptions, all-day dates, cancellation, tentative state, and declined owner participation.
-- [ ] **Step 2: Assert credentials and Authorization headers never appear in errors.**
+- [ ] **Step 1: Write fixture-driven RED tests** for principal discovery, calendar-home discovery, multiple calendar listing, auth rejection, REPORT construction, multi-status XML, expanded recurring occurrences/exceptions, all-day dates, cancellation, tentative state, and declined owner participation.
+- [ ] **Step 2: Assert credentials and Authorization headers never appear in errors.** Assert discovered/report URLs remain HTTPS and under trusted iCloud hosts before sending credentials.
 - [ ] **Step 3: Install parsing dependencies and run the focused test.** It remains RED until adapter implementation exists.
-- [ ] **Step 4: Implement the adapter with injected `fetch` and isolated XML/iCalendar parsers.** Reject unexpected non-HTTPS discovered endpoints and resolve relative DAV hrefs against trusted iCloud origins.
+- [ ] **Step 4: Implement the adapter with injected `fetch` and isolated XML/iCalendar parsers.** Resolve relative DAV hrefs against the trusted iCloud origin; reject credential-bearing redirects/discovery to untrusted hosts.
 - [ ] **Step 5: Run focused and full suite.** Expected: GREEN.
 - [ ] **Step 6: Commit:** `feat: add Apple Calendar provider`.
 
@@ -267,9 +277,9 @@ Existing modules modified:
 
 **Interface:**
 - `syncCalendars({supabase,userId,now,credentialKey,googleConfig,providers,deps})`
-- Optional provider-scoped helper for connect-time discovery, but scheduled/manual refresh must converge through the same core provider-sync function.
+- `syncCalendarConnection(...)` internal/exported-for-test helper used by both manual and scheduled orchestration.
 
-- [ ] **Step 1: Write RED orchestration tests** proving Google and Apple are processed independently; one failure does not block the other; only selected sources fetch events; discovered source metadata can refresh without auto-selecting new calendars; credentials are decrypted only inside the service; each successful source upserts normalized rows and deletes unseen/out-of-window rows; deselected source rows are cleaned; and per-connection attempt/success/error states are updated.
+- [ ] **Step 1: Write RED orchestration tests** proving Google and Apple are processed independently; one failure does not block the other; only selected sources fetch events; discovered source metadata can refresh without auto-selecting new calendars; credentials are decrypted only inside the service; each successful source uses one `syncMarker`, upserts normalized rows and deletes unseen/out-of-window rows; deselected source rows are cleaned; and per-connection attempt/success/error states are updated.
 - [ ] **Step 2: Add failure classification tests.** Credential/auth failures set connection `attention`; transient provider/network failures retain the connection but store a sanitized error. No raw token/password/provider response body is persisted as `last_error`.
 - [ ] **Step 3: Run focused test and confirm RED.**
 - [ ] **Step 4: Implement orchestration with dependency injection.** Provider adapter selection is by stored `provider`; no provider-specific parsing belongs in this service.
@@ -314,7 +324,7 @@ Existing modules modified:
 - Generate at least 32 random bytes.
 - Store a short-lived state value in an HttpOnly, Secure-in-production, SameSite=Lax cookie.
 - Callback requires both a valid owner session and matching state, then clears the state cookie.
-- Exchange code, encrypt refresh/access credential payload before persistence, discover calendars default-off, redirect to Settings.
+- Exchange code, encrypt the provider credential payload before persistence, discover calendars default-off, redirect to Settings.
 
 **Apple connect:**
 - POST-only, same-origin protected form.
@@ -322,9 +332,9 @@ Existing modules modified:
 - Never repopulate or echo the password in rendered HTML.
 
 - [ ] **Step 1: Write page RED tests** for provider cards, connected/disconnected states, account labels, last sync/error status, explicit default-off toggles, manual sync, disconnect controls, and Apple app-specific-password guidance. Assert credential ciphertext/password/tokens never render.
-- [ ] **Step 2: Write route RED tests** for owner auth, same-origin POST enforcement, Google state mismatch/missing state, separate Calendar OAuth scopes, encrypted credential persistence, Apple validation, source ownership on toggles, manual sync invoking the shared service once, and provider disconnect deleting local connection/source/event data only.
+- [ ] **Step 2: Write route RED tests** for owner auth, same-origin POST enforcement, Google state mismatch/missing state, exact separate Calendar OAuth scopes, encrypted credential persistence, Apple validation, source ownership on toggles, manual sync invoking the shared service once, and provider disconnect deleting local connection/source/event data only.
 - [ ] **Step 3: Extend anonymous privacy regressions.** Login HTML must not expose Calendar settings, provider account labels, calendar names, OAuth client details, Apple identifiers, or `/settings/calendars` navigation.
-- [ ] **Step 4: Update `src/config.js` and tests.** Calendar secrets may exist only in server config; assert service-role and VAPID private key remain absent. Never embed Google client secret or credential key into HTML.
+- [ ] **Step 4: Update `src/config.js` and tests.** Calendar secrets may exist only in server config; assert service-role and VAPID private key remain absent. Never embed Google client secret or credential key into HTML. Tests must fail fast when calendar connection routes are enabled without their required server config.
 - [ ] **Step 5: Implement page/routes and wire `handleCalendarsRoute` before `handleSiteRoute`.** Add an authenticated `Calendars`/Settings link on home but no calendar events.
 - [ ] **Step 6: Run focused route/page/config/privacy tests and full suite.** Expected: GREEN.
 - [ ] **Step 7: Commit:** `feat: add calendar settings and connections`.
@@ -371,7 +381,7 @@ Existing modules modified:
 - Do not call Google or Apple.
 - Return `{events, attentionNeeded}` in approved display order.
 - Fresh connection: include eligible events.
-- Connection last-success older than 24h: exclude that connection's events from current content and set attention flag.
+- Stale connection: exclude stale cached events from current content; set `attentionNeeded` only when stale selected-source cached rows overlap the approved digest window and otherwise would have been shown.
 
 **Morning behavior:**
 - Existing Life Admin/birthday/task/trip items continue unchanged.
@@ -380,7 +390,7 @@ Existing modules modified:
 - Continue using the single logical `daily-summary:<Sydney date>` reminder occurrence for delivery dedupe. Calendar events themselves must never create reminder rows.
 - Noon/evening urgent code remains functionally unchanged and must not load calendar data.
 
-- [ ] **Step 1: Write RED digest tests** for today through exact tomorrow 09:00, tomorrow all-day, cancelled/declined exclusion, tentative labeling, ordering, multiple selected calendars/providers, stale-source exclusion, and empty state.
+- [ ] **Step 1: Write RED digest tests** for today overlap through exact tomorrow 09:00, overnight/in-progress events, tomorrow all-day, cancelled/declined exclusion, tentative labeling, ordering, multiple selected calendars/providers, stale-source exclusion/attention, and empty state.
 - [ ] **Step 2: Extend reminder-engine tests** to prove calendar-only mornings send one logical summary, mixed reminder+calendar content sends one summary, stale warning can send, empty everything sends nothing, and noon/evening invoke no calendar dependency.
 - [ ] **Step 3: Implement `calendar-digest.js` and minimally compose it into `runMorningSummary`.** Keep provider logic out of the reminder engine.
 - [ ] **Step 4: Run focused tests and full suite.** Expected: GREEN.
@@ -419,12 +429,12 @@ Existing modules modified:
 - [ ] **Step 5: Verify Railway source binding and exact commit SHA** for UAT web and calendar worker after deploy. Confirm no staged changes are accidentally left pending.
 - [ ] **Step 6: Perform Google real-account UAT.** Connect the one personal Google account; verify separate read-only consent; discover calendars all OFF; select approved calendars only; manual sync; inspect normalized rows; verify excluded calendars contribute no digest events.
 - [ ] **Step 7: Perform Apple real-account UAT.** Create/use an Apple app-specific password; connect; discover calendars all OFF; select approved calendars only; manual sync; inspect normalized rows; verify excluded calendars contribute no digest events. Never paste or log the app-specific password into chat/repo/log output.
-- [ ] **Step 8: Exercise calendar content edge cases in UAT** where practical: timed event, all-day event, tentative event, cancelled/declined exclusion, next-day event exactly/before 09:00, next-day all-day event.
-- [ ] **Step 9: Verify provider isolation and stale-state behavior** with a controlled non-destructive failure (for example, temporarily invalidating only a UAT connection credential then restoring/reconnecting) without exposing secret values.
-- [ ] **Step 10: Confirm a scheduled 06:55 Sydney worker execution** and the following 07:05 UAT Morning Summary use freshly normalized data. If timing makes same-day waiting impractical, use a controlled one-shot invocation of the exact job/service code without altering production schedules, then still verify the real scheduled worker before release if feasible.
+- [ ] **Step 8: Exercise calendar content edge cases in UAT** where practical: timed event, overnight event, all-day event, tentative event, cancelled/declined exclusion, next-day event at/before 09:00, next-day all-day event.
+- [ ] **Step 9: Verify provider isolation and stale-state behavior** with a controlled non-destructive failure, then restore/reconnect without exposing secret values.
+- [ ] **Step 10: Confirm a scheduled 06:55 Sydney worker execution** and the following 07:05 UAT Morning Summary use freshly normalized data. If a controlled one-shot invocation is used for faster diagnosis, it does not replace verification of the real cron configuration and local-time gate before release.
 - [ ] **Step 11: Disconnect/reconnect Google and Apple once each** and confirm local credential/source/event cleanup with no mutation of source calendars.
 - [ ] **Step 12: Final security verification.** Live Supabase RLS/policies/grants/FKs; web-service variable names; worker-only service role; no plaintext credentials in DB responses/logs; anonymous page remains minimal; no calendar event on home/noon/evening paths.
-- [ ] **Step 13: Final exact-head CI and UAT service health verification.** Record branch SHA, CI run, UAT web deployment, calendar worker deployment, and any known non-blocking advisor warning.
+- [ ] **Step 13: Final exact-head CI and UAT service health verification.** Record branch SHA, CI run, UAT web deployment, calendar worker deployment, and the known non-blocking leaked-password advisor warning if it remains.
 - [ ] **Step 14: Stop and request explicit user release approval.** Do not merge `build/preston-ai-v0.10.0` to `main`, change production Google OAuth callbacks, or create production calendar worker wiring until the user approves v0.10 release.
 - [ ] **Step 15: After explicit approval only:** create release PR to `main`, require PR CI GREEN, squash merge exact approved head, verify post-merge CI, add the calendar configuration to production web, create/rebind the production calendar-sync worker to `main`, verify `preston-run-hub` health/version and all production reminder/calendar workers, and confirm web services still lack service-role/VAPID-private credentials.
 
@@ -433,11 +443,12 @@ Existing modules modified:
 ## Plan Self-Review Checklist
 
 - Every approved v0.10 product decision is represented: one account per provider, explicit opt-in, 30-day/12-month cache, minimal event storage, 06:55 sync, morning-only use, today→09:00 tomorrow plus next-day all-day, cancelled/declined exclusion, tentative inclusion, 24-hour stale rule.
-- Google Calendar authorization is separate from Preston login and requests read-only Calendar scopes only.
+- Google Calendar authorization is separate from Preston login and requests only the two exact read-only Calendar scopes.
 - Apple app-specific password handling is server-side, encrypted at rest, and never echoed.
 - Provider adapters remain isolated from sync and digest formatting.
-- Recurrence expansion remains provider-authoritative: Google uses `singleEvents`; Apple requests CalDAV expanded calendar data for the bounded range rather than creating a Preston recurrence engine.
+- Recurrence expansion remains provider-authoritative: Google uses `singleEvents`; Apple requests bounded CalDAV expansion and fails safely rather than creating a Preston recurrence engine.
 - All-day dates use date semantics rather than midnight-UTC coercion.
+- Timed events use interval-overlap semantics so overnight/in-progress events are not silently dropped.
 - Every private data operation is owner scoped in both RLS and application filters.
 - Browser/web services never receive Supabase service-role or VAPID private credentials.
 - Calendar credentials are never present in unauthenticated HTML/static output/logs.
