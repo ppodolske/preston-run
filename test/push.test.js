@@ -20,9 +20,8 @@ assert.equal(classifyPushError(new Error('network')),'transient');
 const client=fs.readFileSync(path.join(__dirname,'../public/notifications.js'),'utf8');
 assert.match(client,/data-enable-notifications/);
 assert.match(client,/Notification\.requestPermission\(\)/);
-const clickIndex=client.indexOf("addEventListener('click'");
-const permissionIndex=client.indexOf('Notification.requestPermission()');
-assert.ok(clickIndex>=0 && permissionIndex>clickIndex,'permission request must occur inside explicit click flow');
+assert.match(client,/addEventListener\('click',[\s\S]*enableNotifications\(button\)/,'enrollment must be invoked only from explicit click handler');
+assert.equal((client.match(/enableNotifications\(button\)/g)||[]).length,2,'helper definition plus one explicit click invocation expected');
 assert.doesNotMatch(client,/VAPID_PRIVATE_KEY|SUPABASE_SERVICE_ROLE_KEY/);
 
 console.log('Push tests passed');
