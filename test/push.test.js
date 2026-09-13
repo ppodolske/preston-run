@@ -4,7 +4,7 @@ const path=require('node:path');
 const {loadConfig}=require('../src/config');
 const {classifyPushError}=require('../src/push/web-push');
 
-const base={SITE_URL:'https://preston.run',SUPABASE_URL:'https://example.supabase.co',SUPABASE_PUBLISHABLE_KEY:'pk',OWNER_GOOGLE_EMAIL:'owner@example.com'};
+const base={SITE_URL:'https://preston.run',SUPABASE_URL:'https://example.supabase.co',SUPABASE_PUBLISHABLE_KEY:'pk',OWNER_GOOGLE_EMAIL:'owner@example.com',GOOGLE_CALENDAR_CLIENT_ID:'calendar-client',GOOGLE_CALENDAR_CLIENT_SECRET:'calendar-secret',CALENDAR_CREDENTIAL_KEY:'calendar-key'};
 const config=loadConfig({...base,VAPID_PUBLIC_KEY:'public-key'});
 assert.equal(config.vapidPublicKey,'public-key');
 assert.equal(Object.hasOwn(config,'vapidPrivateKey'),false,'web config must not expose VAPID private key');

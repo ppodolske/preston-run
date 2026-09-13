@@ -15,7 +15,7 @@ const config={siteUrl:'https://preston.run',ownerGoogleEmail:'owner@example.com'
   supabase={auth:{exchangeCodeForSession:async code=>{exchanged=code==='abc';return {error:null};},getUser:async()=>({data:{user:{email:'owner@example.com'}},error:null}),signOut:async()=>{signedOut=true;}}};
   res=fakeRes(); await handleAuthRoute({method:'GET',url:'/auth/callback?code=abc'},res,{supabase,config}); assert.ok(exchanged); assert.equal(res.headers.location,'/'); assert.equal(signedOut,false);
   supabase={auth:{exchangeCodeForSession:async()=>({error:null}),getUser:async()=>({data:{user:{email:'other@example.com'}},error:null}),signOut:async()=>{signedOut=true;}}};
-  signedOut=false;res=fakeRes();await handleAuthRoute({method:'GET',url:'/auth/callback?code=abc'},res,{supabase,config}); assert.ok(signedOut); assert.equal(res.headers.location,'/auth/denied');
+  signedOut=false;res=fakeRes();await handleAuthRoute({method:'GET',url:'/auth/callback?code=abc'},res,{supabase,config});assert.ok(signedOut);assert.equal(res.headers.location,'/auth/denied');
   supabase={auth:{signOut:async()=>{signedOut=true;}}};signedOut=false;res=fakeRes();await handleAuthRoute({method:'POST',url:'/auth/logout'},res,{supabase,config});assert.ok(signedOut);assert.equal(res.headers.location,'/');
   supabase={auth:{getUser:async()=>({data:{user:null},error:null}),signOut:async()=>{}}};res=fakeRes();await handleSiteRoute({method:'GET',url:'/'},res,{supabase,config});assert.equal(res.status,200);assert.ok(res.body.includes('Sign in with Google'));assert.ok(!res.body.includes('Website admin'));
   supabase={auth:{getUser:async()=>({data:{user:{email:'owner@example.com',user_metadata:{name:'Preston'}}},error:null}),signOut:async()=>{}}};res=fakeRes();await handleSiteRoute({method:'GET',url:'/'},res,{supabase,config});assert.equal(res.status,200);assert.ok(res.body.includes('Website admin'));assert.equal(res.headers['cache-control'],'private, no-store');
@@ -23,8 +23,10 @@ const config={siteUrl:'https://preston.run',ownerGoogleEmail:'owner@example.com'
   Module._load=function(request,parent,isMain){if(request==='@supabase/ssr') return {createServerClient:()=>({})};return originalLoad.call(this,request,parent,isMain);};
   delete require.cache[require.resolve('../src/auth/supabase')]; delete require.cache[require.resolve('../src/app')];
   const {createApp}=require('../src/app'); Module._load=originalLoad;
-  const ownerClient={auth:{getUser:async()=>({data:{user:{email:'owner@example.com'}},error:null}),signOut:async()=>{}}};
-  const app=createApp(config,{createRequestSupabase:()=>ownerClient});
+  const ownerClient={auth:{getUser:async()=>({data:{user:{id:'u1',email:'owner@example.com'}},error:null}),signOut:async()=>{}}};
+  const calendarDeps={listCalendarConnections:async()=>[],listCalendarSources:async()=>[]};
+  const app=createApp(config,{createRequestSupabase:()=>ownerClient,calendarDeps});
+  res=fakeRes();await app({method:'GET',url:'/settings/calendars',headers:{}},res);assert.equal(res.status,200);assert.match(res.body,/Calendars/);
   res=fakeRes();await app({method:'GET',url:'/private/secret',headers:{}},res);assert.equal(res.status,404);
   res=fakeRes();await app({method:'GET',url:'/manifest.webmanifest',headers:{}},res);assert.equal(res.status,200);assert.match(res.headers['content-type'],/manifest/);
   res=fakeRes();await app({method:'GET',url:'/../server.js',headers:{}},res);assert.equal(res.status,404);
