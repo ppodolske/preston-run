@@ -71,4 +71,28 @@ async function recordGmailActivity(supabase,userId,entry){
   return data;
 }
 
-module.exports={findGmailSourceRecord,upsertGmailSourceRecord,updateGmailSourceStatus,upsertGmailAttachmentRecord,updateGmailAttachmentStatus,insertExtractedFacts,recordGmailActivity};
+async function undoGmailActivity(supabase,userId,activityId,{restoreField}={}){
+  const found=await supabase.from('gmail_activity_entries').select('*').eq('user_id',userId).eq('id',activityId).maybeSingle();
+  throwIfError(found.error);
+  const activity=found.data;
+  if(!activity)return null;
+  let restored=false;
+  if(typeof restoreField==='function'&&activity.entity_type&&activity.entity_id&&activity.field_name){
+    restored=await restoreField({entityType:activity.entity_type,entityId:activity.entity_id,fieldName:activity.field_name,value:activity.old_value,activity});
+  }
+  return recordGmailActivity(supabase,userId,{
+    sourceRecordId:activity.source_record_id,
+    factId:activity.fact_id,
+    entityType:activity.entity_type,
+    entityId:activity.entity_id,
+    fieldName:activity.field_name,
+    oldValue:activity.new_value,
+    newValue:activity.old_value,
+    action:restored||!restoreField?'undo':'skip',
+    automatic:false,
+    manualAuthority:Boolean(restored||!restoreField),
+    ruleVersion:'gmail-undo-v0.12.0'
+  });
+}
+
+module.exports={findGmailSourceRecord,upsertGmailSourceRecord,updateGmailSourceStatus,upsertGmailAttachmentRecord,updateGmailAttachmentStatus,insertExtractedFacts,recordGmailActivity,undoGmailActivity};
