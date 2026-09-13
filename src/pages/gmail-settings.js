@@ -5,8 +5,9 @@ const { flashMessage, statusChip } = require('../ui/components');
 
 function dateTime(value){if(!value)return'—';try{return new Intl.DateTimeFormat('en-AU',{timeZone:'Australia/Sydney',day:'numeric',month:'short',hour:'numeric',minute:'2-digit'}).format(new Date(value));}catch{return'—';}}
 function prettyStatus(value){return String(value||'not connected').replace(/_/g,' ');}
-function scanSummary(row){if(!row)return '<p class="muted">No Gmail scans have run yet.</p>';const parts=[`${Number(row.processed_count||0)} processed`,`${Number(row.relevant_count||0)} relevant`,`${Number(row.ignored_count||0)} ignored`,`${Number(row.review_items_created_count||0)} Action Needed`];if(Number(row.pdf_unreadable_count||0)>0)parts.push(`${Number(row.pdf_unreadable_count)} unreadable PDFs`);return `<div data-gmail-scan-status data-scan-id="${escapeHtml(row.id||'')}"><p><strong>${escapeHtml(prettyStatus(row.status))}</strong> · ${escapeHtml(parts.join(' · '))}</p><p class="muted">Started ${escapeHtml(dateTime(row.started_at))}${row.error_summary?` · ${escapeHtml(row.error_summary)}`:''}</p></div>`;}
-function renderScanHistory(rows=[]){if(!rows.length)return '<p class="muted">No scan history yet.</p>';return rows.slice(0,10).map(row=>`<div class="scan-row"><div><strong>${escapeHtml(prettyStatus(row.scan_type))}</strong><span>${escapeHtml(dateTime(row.started_at))}</span></div><div>${escapeHtml(prettyStatus(row.status))} · ${Number(row.processed_count||0)} processed · ${Number(row.relevant_count||0)} relevant</div></div>`).join('');}
+function scanParts(row){return [`${Number(row.processed_count||0)} processed`,`${Number(row.trip_count||0)} Trips`,`${Number(row.life_admin_count||0)} Life Admin`,`${Number(row.review_items_created_count||0)} Needs review`,`${Number(row.ignored_count||0)} ignored`];}
+function scanSummary(row){if(!row)return '<p class="muted">No Gmail scans have run yet.</p>';const parts=scanParts(row);if(Number(row.pdf_unreadable_count||0)>0)parts.push(`${Number(row.pdf_unreadable_count)} unreadable PDFs`);return `<div data-gmail-scan-status data-scan-id="${escapeHtml(row.id||'')}"><p><strong>${escapeHtml(prettyStatus(row.status))}</strong> · ${escapeHtml(parts.join(' · '))}</p><p class="muted">Started ${escapeHtml(dateTime(row.started_at))}${row.error_summary?` · ${escapeHtml(row.error_summary)}`:''}</p></div>`;}
+function renderScanHistory(rows=[]){if(!rows.length)return '<p class="muted">No scan history yet.</p>';return rows.slice(0,10).map(row=>`<div class="scan-row"><div><strong>${escapeHtml(prettyStatus(row.scan_type))}</strong><span>${escapeHtml(dateTime(row.started_at))}</span></div><div>${escapeHtml(prettyStatus(row.status))} · ${escapeHtml(scanParts(row).join(' · '))}</div></div>`).join('');}
 
 function renderGmailSettingsPage({connection=null,scanHistory=[],latestScan=null,csrfToken='',flash=null}={}){
   const connected=connection&&connection.status!=='disconnected';
@@ -14,4 +15,4 @@ function renderGmailSettingsPage({connection=null,scanHistory=[],latestScan=null
   return renderShell({title:'Gmail',activeNav:'Gmail',body,headExtra:'<link rel="stylesheet" href="/settings.css">',scripts:connected?['/gmail-status.js']:[]});
 }
 
-module.exports={renderGmailSettingsPage,renderScanHistory,scanSummary};
+module.exports={renderGmailSettingsPage,renderScanHistory,scanSummary,scanParts};

@@ -5,7 +5,7 @@
   function render(scan){
     const host=document.querySelector('[data-gmail-scan-status]');
     if(!host||!scan)return;
-    const parts=[`${Number(scan.processed_count||0)} processed`,`${Number(scan.relevant_count||0)} relevant`,`${Number(scan.ignored_count||0)} ignored`,`${Number(scan.review_items_created_count||0)} Action Needed`];
+    const parts=[`${Number(scan.processed_count||0)} processed`,`${Number(scan.trip_count||0)} Trips`,`${Number(scan.life_admin_count||0)} Life Admin`,`${Number(scan.review_items_created_count||0)} Needs review`,`${Number(scan.ignored_count||0)} ignored`];
     if(Number(scan.pdf_unreadable_count||0)>0)parts.push(`${Number(scan.pdf_unreadable_count)} unreadable PDFs`);
     host.dataset.scanId=scan.id||'';
     host.innerHTML=`<p><strong>${String(scan.status||'').replace(/_/g,' ')}</strong> · ${parts.join(' · ')}</p><p class="muted">${scan.error_summary?String(scan.error_summary):'Status updates automatically while the scan runs.'}</p>`;

@@ -2,6 +2,8 @@ const {buildEligibleMessagesQuery}=require('./gmail-provider');
 const {findPdfAttachments,decodeBase64Url}=require('./gmail-pdf');
 const {isEligibleReceivedMessage}=require('../domain/gmail-eligibility');
 const {normalizeGmailMessage}=require('../domain/gmail-normalize');
+const {classifyGmailIntent}=require('../domain/gmail-intent');
+const {extractLifeAdminCandidate}=require('../domain/gmail-life-admin-extractor');
 const {extractTripFacts}=require('../domain/gmail-trip-extractor');
 const {rankTripMatch}=require('../domain/gmail-trip-matcher');
 const {decideGmailTripActions}=require('../domain/gmail-decisions');
@@ -26,16 +28,17 @@ function defaultActions(){
     recordGmailActivity:async()=>null
   };
 }
+function defaultLifeAdminActions(){return{createLifeAdminItem:async()=>null,createReviewItem:async()=>null};}
 
 async function applyTripDecisions({actions,facts,match,source}){
   const manualFields=(await actions.getManualFieldsForMatch(match,{source,facts}))||new Set();
   const decisions=decideGmailTripActions({facts,match,manualFields});
   for(const decision of decisions){
-    const enriched={...decision,sourceRecordId:source.id};
+    const enriched={...decision,sourceRecordId:source.id,source};
     if(decision.type==='create_trip')await actions.applyCreateTripFromGmail(enriched);
     else if(decision.type==='update_trip')await actions.applyUpdateTripFromGmail(enriched);
     else if(decision.type==='review')await actions.createGmailReviewItem(enriched);
-    else await actions.recordGmailActivity({action:'skip',reason:decision.reason,sourceRecordId:source.id,entityType:'gmail_source',ruleVersion:'gmail-decision-v0.12.0'});
+    else await actions.recordGmailActivity({action:'skip',reason:decision.reason,sourceRecordId:source.id,entityType:'gmail_source',ruleVersion:'gmail-decision-v0.12.1'});
   }
   return decisions;
 }
@@ -63,14 +66,23 @@ async function extractPdfFacts({message,provider,persistence,source,config,pdfPa
   return {facts,unreadableCount};
 }
 
-async function runGmailScan({supabase,userId,connection,provider,config,existingTrips=[],persistence,actions,pdfParse}){
+function countTripDecisions(counters,decisions=[]){
+  for(const decision of decisions){
+    if(decision.type==='create_trip')counters.recordsCreatedCount+=1;
+    else if(decision.type==='update_trip')counters.recordsUpdatedCount+=1;
+    else if(decision.type==='review')counters.reviewItemsCreatedCount+=1;
+  }
+}
+
+async function runGmailScan({supabase,userId,connection,provider,config,existingTrips=[],persistence,actions,lifeAdminActions,pdfParse,intentClassifier=classifyGmailIntent,lifeAdminExtractor=extractLifeAdminCandidate}){
   const resolvedActions={...defaultActions(),...(actions||{})};
+  const resolvedLifeAdminActions={...defaultLifeAdminActions(),...(lifeAdminActions||{})};
   const resolvedConfig={...config,extractNativePdfText:config.extractNativePdfText||require('./gmail-pdf').extractNativePdfText};
   const window=determineScanWindow(connection,new Date(),resolvedConfig.initialLookbackMonths);
   const query=buildEligibleMessagesQuery(window);
   const scan=await persistence.startScan(supabase,userId,connection,window.scanType,{scannerVersion:resolvedConfig.scannerVersion,lookbackStartAt:window.after});
   let newest=null;
-  const counters={discoveredCount:0,processedCount:0,ignoredCount:0,relevantCount:0,factsCreatedCount:0,decisionCount:0,pdfUnreadableCount:0};
+  const counters={discoveredCount:0,processedCount:0,ignoredCount:0,relevantCount:0,tripCount:0,lifeAdminCount:0,factsCreatedCount:0,recordsCreatedCount:0,recordsUpdatedCount:0,reviewItemsCreatedCount:0,decisionCount:0,pdfUnreadableCount:0};
   try{
     let pageToken=null;
     do{
@@ -88,17 +100,41 @@ async function runGmailScan({supabase,userId,connection,provider,config,existing
         const normalized=normalizeGmailMessage(message,connection.gmail_account_email,resolvedConfig.scannerVersion);
         const source=await persistence.upsertSource(normalized,scan.id);
         newest=newest||normalized;
-        const messageFacts=extractTripFacts({sourceRecordId:source.id,sender:normalized.sender,subject:normalized.subject,receivedAt:normalized.received_at,text:message.snippet||''},{parserVersion:resolvedConfig.parserVersion});
-        const pdfResult=await extractPdfFacts({message,provider,persistence,source,config:resolvedConfig,pdfParse});
-        counters.pdfUnreadableCount+=pdfResult.unreadableCount;
-        const facts=[...messageFacts,...pdfResult.facts];
-        if(facts.length)counters.relevantCount+=1;
-        const insertedFacts=await persistence.insertFacts(facts);
-        const persistedFacts=Array.isArray(insertedFacts)&&insertedFacts.length?insertedFacts:facts;
-        counters.factsCreatedCount+=persistedFacts.length;
-        const match=rankTripMatch(persistedFacts,existingTrips);
-        const decisions=await applyTripDecisions({actions:resolvedActions,facts:persistedFacts,match,source});
-        counters.decisionCount+=decisions.length;
+        const attachmentNames=findPdfAttachments(message).map(a=>a.filename).filter(Boolean).join(' ');
+        const envelope={sender:normalized.sender,subject:normalized.subject,text:[message.snippet||'',attachmentNames].filter(Boolean).join('\n')};
+        const classification=intentClassifier(envelope);
+
+        if(classification.intent==='ignore'){
+          counters.ignoredCount+=1;
+        }else if(classification.intent==='review'){
+          await resolvedLifeAdminActions.createReviewItem(source,classification);
+          counters.reviewItemsCreatedCount+=1;
+          counters.recordsCreatedCount+=1;
+          counters.relevantCount+=1;
+        }else if(classification.intent==='life_admin'){
+          const candidate=lifeAdminExtractor(envelope,classification);
+          await resolvedLifeAdminActions.createLifeAdminItem(source,candidate,classification);
+          counters.lifeAdminCount+=1;
+          counters.recordsCreatedCount+=1;
+          counters.relevantCount+=1;
+        }else if(classification.intent==='trip'){
+          counters.tripCount+=1;
+          counters.relevantCount+=1;
+          const messageFacts=extractTripFacts({sourceRecordId:source.id,sender:normalized.sender,subject:normalized.subject,receivedAt:normalized.received_at,text:message.snippet||''},{parserVersion:resolvedConfig.parserVersion});
+          const pdfResult=await extractPdfFacts({message,provider,persistence,source,config:resolvedConfig,pdfParse});
+          counters.pdfUnreadableCount+=pdfResult.unreadableCount;
+          const facts=[...messageFacts,...pdfResult.facts];
+          const insertedFacts=await persistence.insertFacts(facts);
+          const persistedFacts=Array.isArray(insertedFacts)&&insertedFacts.length?insertedFacts:facts;
+          counters.factsCreatedCount+=persistedFacts.length;
+          const match=rankTripMatch(persistedFacts,existingTrips);
+          const decisions=await applyTripDecisions({actions:resolvedActions,facts:persistedFacts,match,source});
+          counters.decisionCount+=decisions.length;
+          countTripDecisions(counters,decisions);
+        }else{
+          counters.ignoredCount+=1;
+        }
+
         if(persistence.updateSourceStatus)await persistence.updateSourceStatus(source.id,{processing_status:'processed',processing_reason:null});
         counters.processedCount+=1;
       }
@@ -113,4 +149,4 @@ async function runGmailScan({supabase,userId,connection,provider,config,existing
   }
 }
 
-module.exports={determineScanWindow,runGmailScan,ymd,applyTripDecisions,defaultActions,extractPdfFacts};
+module.exports={determineScanWindow,runGmailScan,ymd,applyTripDecisions,defaultActions,defaultLifeAdminActions,extractPdfFacts,countTripDecisions};

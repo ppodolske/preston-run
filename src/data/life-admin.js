@@ -17,6 +17,17 @@ function payload(input = {}) {
   };
 }
 
+function gmailSourceMetadata(input={}){
+  return {
+    source:'gmail',
+    source_record_id:optionalText(input.source_record_id),
+    gmail_message_id:optionalText(input.gmail_message_id),
+    source_link:optionalText(input.source_link),
+    sender:optionalText(input.sender),
+    classification_reason:optionalText(input.classification_reason)
+  };
+}
+
 async function listLifeItems(supabase) {
   const result = await supabase.from('life_items').select('*').order('due_at',{ascending:true,nullsFirst:false}).order('title',{ascending:true});
   if (result.error) throw result.error;
@@ -36,6 +47,13 @@ async function createLifeItem(supabase,user,input) {
   return result.data;
 }
 
+async function createGmailLifeItem(supabase,user,input,sourceMetadata={}){
+  if (!user || !user.id) throw new Error('Authenticated user is required');
+  const result=await supabase.from('life_items').insert({...payload(input),user_id:user.id,source_metadata:gmailSourceMetadata(sourceMetadata)}).select('*').single();
+  if(result.error)throw result.error;
+  return result.data;
+}
+
 async function updateLifeItem(supabase,user,id,input) {
   if (!user || !user.id) throw new Error('Authenticated user is required');
   const result = await supabase.from('life_items').update({...payload(input),updated_at:new Date().toISOString()}).eq('id',id).eq('user_id',user.id).select('*').maybeSingle();
@@ -50,4 +68,4 @@ async function deleteLifeItem(supabase,user,id) {
   return Boolean(result.data);
 }
 
-module.exports={listLifeItems,getLifeItem,createLifeItem,updateLifeItem,deleteLifeItem,payload};
+module.exports={listLifeItems,getLifeItem,createLifeItem,createGmailLifeItem,updateLifeItem,deleteLifeItem,payload,gmailSourceMetadata};

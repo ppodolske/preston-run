@@ -20,13 +20,13 @@ function fakeSupabase(){
   assert.equal(supabase.calls[1][1].scan_type,'initial');
   assert.equal(supabase.calls[1][1].status,'running');
 
-  const progress=scanProgressPatch({discoveredCount:2,processedCount:1,relevantCount:1,factsCreatedCount:3,decisionCount:99,pdfUnreadableCount:1});
-  assert.deepEqual(progress,{discovered_count:2,processed_count:1,relevant_count:1,facts_created_count:3,pdf_unreadable_count:1});
+  const progress=scanProgressPatch({discoveredCount:5,processedCount:5,relevantCount:3,tripCount:1,lifeAdminCount:2,factsCreatedCount:3,recordsCreatedCount:3,recordsUpdatedCount:1,reviewItemsCreatedCount:1,decisionCount:99,pdfUnreadableCount:1});
+  assert.deepEqual(progress,{discovered_count:5,processed_count:5,relevant_count:3,trip_count:1,life_admin_count:2,facts_created_count:3,records_created_count:3,records_updated_count:1,review_items_created_count:1,pdf_unreadable_count:1});
   assert.equal(Object.hasOwn(progress,'decisionCount'),false);
   const supabaseProgress=fakeSupabase();
-  await updateGmailScanProgress(supabaseProgress,'user1','scan1',{processedCount:2,ignoredCount:1,decisionCount:1});
+  await updateGmailScanProgress(supabaseProgress,'user1','scan1',{processedCount:2,ignoredCount:1,tripCount:1,lifeAdminCount:1,decisionCount:1});
   const progressUpdate=supabaseProgress.calls.find(call=>call[0]==='update');
-  assert.deepEqual(progressUpdate[1],{processed_count:2,ignored_count:1});
+  assert.deepEqual(progressUpdate[1],{processed_count:2,ignored_count:1,trip_count:1,life_admin_count:1});
 
   const supabase2=fakeSupabase();
   await finishGmailScanRun(supabase2,'user1','conn1','scan1',{checkpointReceivedAt:'2026-09-13T00:00:00Z',checkpointMessageId:'msg9',firstScanCompleted:true});
