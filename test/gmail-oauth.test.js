@@ -1,5 +1,5 @@
 const assert=require('node:assert/strict');
-const {GMAIL_READONLY_SCOPE,buildGmailAuthUrl,fetchGmailProfile,exchangeGmailCode,createGmailOAuth}=require('../src/services/gmail-oauth');
+const {GMAIL_READONLY_SCOPE,buildGmailAuthUrl,fetchGmailProfile,exchangeGmailCode,refreshGmailAccessToken,createGmailOAuth}=require('../src/services/gmail-oauth');
 
 const config={gmail:{clientId:'client1',clientSecret:'secret1',redirectUri:'https://preston.run/me/settings/gmail/callback'}};
 
@@ -37,9 +37,23 @@ assert.throws(()=>buildGmailAuthUrl({gmail:{}}),/missing clientId/);
   assert.equal(exchanged.scope,GMAIL_READONLY_SCOPE);
   assert.equal(exchanged.accountEmail,'access1@example.com');
 
+  const refreshed=await refreshGmailAccessToken(config,'refresh1',{fetch:async(url,opts)=>{
+    assert.match(url,/oauth2\/v4\/token/);
+    assert.equal(opts.method,'POST');
+    const body=String(opts.body);
+    assert.match(body,/grant_type=refresh_token/);
+    assert.match(body,/refresh_token=refresh1/);
+    assert.match(body,/client_id=client1/);
+    assert.match(body,/client_secret=secret1/);
+    return {ok:true,json:async()=>({access_token:'access2',scope:GMAIL_READONLY_SCOPE,expires_in:3600,token_type:'Bearer'})};
+  }});
+  assert.equal(refreshed.accessToken,'access2');
+  assert.equal(refreshed.scope,GMAIL_READONLY_SCOPE);
+  assert.equal(refreshed.expiresIn,3600);
+
   const oauth=createGmailOAuth(config,{fetch:async()=>({ok:true,json:async()=>({access_token:'a',refresh_token:'r',scope:GMAIL_READONLY_SCOPE})}),fetchProfile:async()=>({emailAddress:'me@example.com'})});
   assert.equal(typeof oauth.buildAuthUrl,'function');
   assert.equal(typeof oauth.exchangeCode,'function');
   assert.equal(oauth.buildAuthUrl({state:'x'}).includes('gmail.readonly'),true);
   console.log('gmail oauth tests passed');
-})();
+})().catch(error=>{console.error(error);process.exit(1);});
