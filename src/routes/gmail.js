@@ -4,22 +4,29 @@ const {html,redirect,text}=require('../http/respond');
 const {getGmailConnection,markGmailDisconnected}=require('../data/gmail-connections');
 const {undoGmailActivity}=require('../data/gmail-sources');
 const {renderGmailSettingsPage}=require('../pages/gmail-settings');
-
-const GMAIL_READONLY_SCOPE='https://www.googleapis.com/auth/gmail.readonly';
+const {GMAIL_READONLY_SCOPE}=require('../services/gmail-oauth');
 
 async function owner(supabase,config,res){const auth=await getAuthorizedOwner(supabase,config);if(auth.user)return auth.user;if(auth.reason==='not_owner')await supabase.auth.signOut();redirect(res,'/');return null;}
 function privateHtml(res,status,body){html(res,status,body,{'cache-control':'private, no-store'});}
 function isGmailPath(path){return path==='/me/settings/gmail'||path==='/me/settings/gmail/connect'||path==='/me/settings/gmail/callback'||path==='/me/settings/gmail/disconnect'||path==='/me/settings/gmail/scan-now'||path==='/me/settings/gmail/retry-failed'||/^\/me\/settings\/gmail\/activity\/[^/]+\/undo$/.test(path);}
 function buildGmailAuthUrl(googleOAuth,config){return googleOAuth.buildAuthUrl({scope:[GMAIL_READONLY_SCOPE],redirectUri:config.gmail&&config.gmail.redirectUri});}
+function tokenEncryptors(deps){
+  const encryptAccessToken=deps.encryptAccessToken||deps.encrypt;
+  const encryptRefreshToken=deps.encryptRefreshToken||deps.encrypt;
+  return {encryptAccessToken,encryptRefreshToken};
+}
 
-async function completeGmailOAuthCallback({supabase,userId,code,config,googleOAuth,encrypt,upsertGmailConnection,startScanNow}){
+async function completeGmailOAuthCallback({supabase,userId,code,config,googleOAuth,encrypt,encryptAccessToken,encryptRefreshToken,upsertGmailConnection,startScanNow}){
   if(startScanNow)void startScanNow;
   const exchanged=await googleOAuth.exchangeCode(code,{redirectUri:config.gmail&&config.gmail.redirectUri});
+  const accessEncryptor=encryptAccessToken||encrypt;
+  const refreshEncryptor=encryptRefreshToken||encrypt;
+  if(!accessEncryptor||!refreshEncryptor)throw new Error('Gmail token encryption is not configured');
   return upsertGmailConnection(supabase,userId,{
     gmailAccountEmail:exchanged.accountEmail,
     googleSubject:exchanged.googleSubject,
-    accessTokenCiphertext:encrypt(exchanged.accessToken),
-    refreshTokenCiphertext:encrypt(exchanged.refreshToken),
+    accessTokenCiphertext:accessEncryptor(exchanged.accessToken),
+    refreshTokenCiphertext:refreshEncryptor(exchanged.refreshToken),
     scope:exchanged.scope
   });
 }
@@ -46,9 +53,10 @@ async function handleGmailRoute(req,res,context){
     return true;
   }
   if(req.method==='GET'&&url.pathname==='/me/settings/gmail/callback'){
-    if(!deps.googleOAuth||!deps.encrypt||!deps.upsertGmailConnection){text(res,501,'Gmail OAuth is not configured',{'cache-control':'no-store'});return true;}
+    const encryptors=tokenEncryptors(deps);
+    if(!deps.googleOAuth||!deps.upsertGmailConnection||!encryptors.encryptAccessToken||!encryptors.encryptRefreshToken){text(res,501,'Gmail OAuth is not configured',{'cache-control':'no-store'});return true;}
     try{
-      await completeGmailOAuthCallback({supabase,userId:user.id,code:url.searchParams.get('code'),config,googleOAuth:deps.googleOAuth,encrypt:deps.encrypt,upsertGmailConnection:deps.upsertGmailConnection,startScanNow:deps.startScanNow});
+      await completeGmailOAuthCallback({supabase,userId:user.id,code:url.searchParams.get('code'),config,googleOAuth:deps.googleOAuth,encryptAccessToken:encryptors.encryptAccessToken,encryptRefreshToken:encryptors.encryptRefreshToken,upsertGmailConnection:deps.upsertGmailConnection,startScanNow:deps.startScanNow});
       redirect(res,'/me/settings/gmail?connected=1');
     }catch{ text(res,500,'Unable to connect Gmail',{'cache-control':'no-store'}); }
     return true;
@@ -65,10 +73,10 @@ async function handleGmailRoute(req,res,context){
     try{const connection=deps.getGmailConnection?await deps.getGmailConnection(supabase,user.id):await getGmailConnection(supabase,user.id);if(connection)await (deps.markGmailDisconnected||markGmailDisconnected)(supabase,user.id,connection.id);redirect(res,'/me/settings/gmail');}catch{text(res,500,'Unable to disconnect Gmail',{'cache-control':'no-store'});}return true;
   }
   if(url.pathname==='/me/settings/gmail/scan-now'){
-    try{if(deps.startScanNow)await deps.startScanNow(supabase,user.id);redirect(res,'/me/settings/gmail?scan=1');}catch{text(res,500,'Unable to start Gmail scan',{'cache-control':'no-store'});}return true;
+    try{if(!deps.startScanNow)throw new Error('Gmail manual scan is not configured');await deps.startScanNow(supabase,user.id);redirect(res,'/me/settings/gmail?scan=1');}catch{text(res,500,'Unable to start Gmail scan',{'cache-control':'no-store'});}return true;
   }
   if(url.pathname==='/me/settings/gmail/retry-failed'){
-    try{if(deps.retryFailedGmailItems)await deps.retryFailedGmailItems(supabase,user.id);redirect(res,'/me/settings/gmail?scan=1');}catch{text(res,500,'Unable to retry Gmail items',{'cache-control':'no-store'});}return true;
+    try{if(!deps.retryFailedGmailItems)throw new Error('Gmail retry is not configured');await deps.retryFailedGmailItems(supabase,user.id);redirect(res,'/me/settings/gmail?scan=1');}catch{text(res,500,'Unable to retry Gmail items',{'cache-control':'no-store'});}return true;
   }
   const undo=url.pathname.match(/^\/me\/settings\/gmail\/activity\/([^/]+)\/undo$/);
   if(undo){
@@ -79,4 +87,4 @@ async function handleGmailRoute(req,res,context){
 
 function createGmailRouter(deps={}){return function gmailRouter(req,res){return handleGmailRoute(req,res,deps);};}
 
-module.exports={handleGmailRoute,createGmailRouter,listRecentScans,isGmailPath,buildGmailAuthUrl,completeGmailOAuthCallback,GMAIL_READONLY_SCOPE};
+module.exports={handleGmailRoute,createGmailRouter,listRecentScans,isGmailPath,buildGmailAuthUrl,completeGmailOAuthCallback,GMAIL_READONLY_SCOPE,tokenEncryptors};
