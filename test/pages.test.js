@@ -20,21 +20,31 @@ const home = renderHomePage({
     ]
   },
   morningDigest:{
-    status:'good',headline:'Recovery signals look broadly normal.',generated_at:'2026-09-13T21:15:00Z',garmin_sync_at:'2026-09-13T20:55:00Z',
+    status:'poor',headline:'Recovery is meaningfully suppressed this morning.',generated_at:'2026-09-13T21:15:00Z',garmin_sync_at:'2026-09-13T20:55:00Z',
     cards:[
-      {id:'recovery',title:'Recovery',items:[{label:'Sleep',value:'7h 42m'},{label:'Resting HR',value:'50 bpm'}]},
-      {id:'training',title:'Today’s training',items:[{label:'Today',value:'Workout B'},{label:'Last 7 days',value:'3 sessions'}]},
-      {id:'weight',title:'Weight trend',items:[{label:'28-day direction',value:'Down'}]},
+      {id:'recovery',title:'Recovery',items:[{label:'Sleep',value:'0h 0m'},{label:'Resting HR',value:'54 bpm'}]},
+      {id:'training',title:'Training',items:[{label:'Today',value:'No workout planned'},{label:'Last 7 days',value:'8 sessions'}]},
+      {id:'weight',title:'Weight trend',items:[{label:'28-day direction',value:'Up'}]},
       {id:'context',title:'Context',items:[{label:'Active phase',value:'Base phase'}]}
     ],
-    bullets:['Today’s plan is Workout B. Recovery does not currently suggest a need to change it.']
+    bullets:[
+      'Sleep was very short at 0h 0m.',
+      'Sleep score was 29.',
+      'Resting HR is 4 bpm above the recent baseline.',
+      'No planned workout is scheduled for today.',
+      '28-day weight trend is up (+85.1 kg between early and recent averages).',
+      'Last 7 days: 8 sessions (4 runs, 4 lifts, 33.4 km running).'
+    ]
   },
   fitnessContext:{fetched_at:'2026-09-13T21:15:00Z'},
   upcomingTrips:[{id:'trip1',title:'Chicago & Milwaukee',status:'upcoming',start_date:'2026-10-01',end_date:'2026-10-10'}]
 });
-for (const expected of ['preston.ai','/assets/preston-ai-logo.png','Good morning','Dose &amp; Scale','State Parks','Archive','Website admin','id="condition"','/auth/logout','Log out','v0.11.0','Weather','Calendar','Personal','Holidays','Reminders','Planned Workouts','Workout B','Easy Run','Completed','Overdue','Today','Birthdays','Life Admin','Trips','Chicago &amp; Milwaukee','/trips/trip1','/trips','Licence renewal','Pay renewal fee','Call insurer','Urgent','/life-admin/l1','/tasks/t1/edit','Notifications','/notifications','/settings/calendars','View calendar','href="/calendar"','app-launcher','Morning Digest','Recovery signals look broadly normal.','digest-grid','Recovery','Today’s training','Weight trend','Context','Refresh digest','admin-grid','admin-card','preston.run','dose.preston.run','parks.preston.run','archive.preston.run','https://parks.preston.run/park-favicon.svg','https://archive.preston.run/icon.svg']) assert.ok(home.includes(expected),`home missing ${expected}`);
+for (const expected of ['preston.ai','/assets/preston-ai-logo.png','Good morning','Dose &amp; Scale','State Parks','Archive','Website admin','id="condition"','/auth/logout','Log out','v0.11.0','Weather','Calendar','Personal','Holidays','Reminders','Planned Workouts','Workout B','Easy Run','Completed','Overdue','Today','Birthdays','Life Admin','Trips','Chicago &amp; Milwaukee','/trips/trip1','/trips','Licence renewal','Pay renewal fee','Call insurer','Urgent','/life-admin/l1','/tasks/t1/edit','Notifications','/notifications','/settings/calendars','View calendar','href="/calendar"','app-launcher','Morning Digest','Recovery is meaningfully suppressed this morning.','digest-grid','Recovery','Training','Weight trend','Context','Refresh digest','admin-grid','admin-card','preston.run','dose.preston.run','parks.preston.run','archive.preston.run','https://parks.preston.run/park-favicon.svg','https://archive.preston.run/icon.svg']) assert.ok(home.includes(expected),`home missing ${expected}`);
 assert.match(home,/\.morning-digest\{[^}]*width:100%/,'Morning Digest should span available width');
 assert.match(home,/@media\(max-width:650px\)[\s\S]*\.card,\.morning-digest,\.admin-card\{width:100%/,'mobile cards should be explicitly full width');
+assert.match(home,/\.digest-card h3\{[^}]*font-family:'Instrument Serif'/,'digest card titles should use the D&S serif treatment');
+for (const expected of ['digest-insights','digest-insight','digest-insight-label','digest-insight-value','digest-insight-detail','Sleep</span><strong class="digest-insight-value">Very short · 0h 0m','Sleep score</span><strong class="digest-insight-value">29 · Poor','Resting HR</span><strong class="digest-insight-value">+4 bpm vs baseline','Today&#39;s training</span><strong class="digest-insight-value">No workout planned','28-day weight trend</span><strong class="digest-insight-value">Up · +85.1 kg','Last 7 days</span><strong class="digest-insight-value">8 sessions','4 runs · 4 lifts · 33.4 km running']) assert.ok(home.includes(expected),`digest insight missing ${expected}`);
+assert.ok(!home.includes('<div class="digest-notes"><p>Sleep was very short at 0h 0m.</p>'),'digest bullets should not render as sentence pills');
 assert.ok(!home.includes('owner@example.com'),'home should not expose owner email');
 assert.ok(!home.includes('ppodolske@gmail.com'),'dashboard must not expose Personal source labels');
 assert.ok(!home.includes('>Home<'),'dashboard must not expose Home source label');
