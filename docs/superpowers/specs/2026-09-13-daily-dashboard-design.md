@@ -20,7 +20,7 @@ Extend the existing server-rendered home-page flow.
 
 The current `GET /` route already loads people, Life Admin items, tasks, and trips server-side before passing them to `renderHomePage`. v0.11.0 will add dashboard calendar data to that same route and rework `src/pages/home.js` into a three-column dashboard.
 
-The dashboard must read from the existing normalized Supabase calendar cache. It must not contact Google Calendar or Apple CalDAV during a page request. Weather and app-status probing may remain browser-side because they are non-private and already work that way.
+The dashboard and full calendar view must read from the existing normalized Supabase calendar cache. They must not contact Google Calendar or Apple CalDAV during page requests. Weather and app-status probing may remain browser-side because they are non-private and already work that way.
 
 A separate dashboard API or client-side data-loading architecture is intentionally out of scope.
 
@@ -144,10 +144,43 @@ Within each group:
 - chronological order;
 - all-day items clearly marked as all-day;
 - tomorrow items visually distinguished from today without creating a separate page-level section;
-- compact presentation suitable for the middle column;
-- provide a link to Calendar settings/details where useful, but do not turn the dashboard into a full calendar UI.
+- compact presentation suitable for the middle column.
+
+The Calendar briefing card itself must be an obvious interactive entry point to the full imported-calendar view at `/calendar`. Do not make individual dashboard event rows require separate navigation behavior; the primary card/title action should open the full view.
 
 If a group has no qualifying items, show a compact empty state rather than hiding the group entirely unless doing so materially reduces clutter.
+
+## Full calendar view
+
+Add a new authenticated read-only route at `/calendar` for viewing everything currently imported into the normalized calendar cache.
+
+This is distinct from `/settings/calendars`, which remains the connection/source-selection/sync settings page.
+
+### Purpose
+
+The full calendar view should let the user inspect all imported calendar events beyond the short dashboard horizon without opening Google Calendar or iCloud Calendar.
+
+### Default presentation
+
+- default to a conventional month calendar centered on the current Sydney month;
+- provide previous-month, next-month, and Today navigation;
+- show all imported events that overlap the visible month, including all-day and multi-day events;
+- preserve source colors when useful in the full view, because source differentiation is valuable here even though `ppodolske@gmail.com` and `Home` are intentionally flattened on the dashboard;
+- event detail may expose title, date/time, all-day state, location, source display name, and external provider URL when present;
+- remain read-only in v0.11.0.
+
+The page must query only the normalized Supabase cache and associated source metadata. It must not trigger provider sync or provider API calls as part of normal rendering.
+
+### Calendar navigation relationship
+
+- clicking/tapping the dashboard Calendar briefing card or its `View calendar` affordance opens `/calendar`;
+- `/calendar` includes a clear path back to the dashboard;
+- `/calendar` includes a secondary link to `/settings/calendars` for connection/source management;
+- Calendar Settings does not become the primary destination from the dashboard.
+
+### Full-view failure behavior
+
+If calendar data is unavailable, `/calendar` still renders its authenticated page shell and a clear unavailable state with a link to Calendar Settings; it must not expose credentials or raw provider identifiers.
 
 ## Needs Attention
 
@@ -200,7 +233,16 @@ Cards should not expand indefinitely. Favor capped lists plus navigation links t
 
 Retain the current application shortcuts and status checks for Dose & Scale, Parks, and Archive.
 
-Compress them for the right column rather than using the current large three-card row.
+Present them as compact iPhone-style app launchers rather than generic cards:
+
+- use each app's own maintained app icon/favicon asset;
+- render the icon as the dominant square/rounded-square visual with the app name beneath or immediately adjacent;
+- keep status as a small secondary indicator/badge so it does not overpower the launcher treatment;
+- clicking the icon or label opens the app;
+- do not fetch or scrape remote favicons dynamically during page load; define stable icon asset URLs/metadata in the app registry or another maintained configuration source;
+- if an app icon cannot load, fall back gracefully to a neutral branded placeholder rather than breaking layout.
+
+Compress these launchers for the right column and mobile launcher row/grid.
 
 The existing `/api/status` probing behavior may remain unless implementation reveals a concrete performance/reliability issue.
 
@@ -219,14 +261,17 @@ Each domain must degrade independently:
 - Birthday data unavailable: Birthday card degrades independently.
 - Trip data unavailable: Trip card degrades independently.
 - Weather unavailable: Weather card shows an unavailable state after client-side fetch failure.
-- App-status probe unavailable: app status shows unavailable while navigation remains usable.
+- App-status probe unavailable: app status shows unavailable while app launchers/navigation remain usable.
+- App icon unavailable: only that launcher uses its fallback icon.
 
 The server must continue returning the authenticated home page whenever at least the core page renderer can run.
 
 ## Data and privacy boundaries
 
 - Personal calendar, Life Admin, task, trip, and birthday data stays server-rendered and private.
-- Do not expose provider credentials, provider calendar identifiers, or secret configuration in HTML or client-side APIs.
+- The full `/calendar` page is authenticated and private.
+- Do not expose provider credentials or secret configuration in HTML or client-side APIs.
+- Provider calendar identifiers must not be surfaced to the user; source display names/colors are allowed in the full calendar view.
 - Do not broaden Google Calendar OAuth scopes.
 - Do not create calendar events as preston.ai reminder rows.
 - Noon/evening urgent reminder behavior remains unchanged.
@@ -244,10 +289,13 @@ The server must continue returning the authenticated home page whenever at least
 Expected areas of change:
 
 - `src/routes/site.js` — load calendar dashboard data and pass richer dashboard state into the renderer.
-- `src/pages/home.js` — replace portal-style layout with the approved three-column dashboard.
-- calendar data/domain helper(s) — derive Sydney dashboard window, source grouping, overlap behavior, and reminder visibility.
+- `src/pages/home.js` — replace portal-style layout with the approved three-column dashboard and icon-based app launchers.
+- `src/routes/calendars.js` or a focused read-only calendar route module — serve authenticated `/calendar` separately from `/settings/calendars`.
+- new/read-only calendar page renderer — render month navigation, event layout, event details, dashboard/settings navigation.
+- `src/branding.js` or focused app-registry metadata — add maintained app icon asset URLs/paths.
+- calendar data/domain helper(s) — derive Sydney dashboard window, source grouping, overlap behavior, reminder visibility, and visible-month event ranges.
 - Life Admin domain helper(s) — expose explicit Overdue vs Today sets and prevent duplication in Coming Up.
-- tests — dashboard calendar-window boundaries, grouping rules, reminder filtering, attention splitting/deduplication, rendering, and independent failure states.
+- tests — dashboard calendar-window boundaries, grouping rules, reminder filtering, full-calendar month range/navigation, attention splitting/deduplication, app launcher rendering, independent failure states.
 - version/branding files — bump to `0.11.0`.
 
 If the calendar reminder-state verification requires a model extension, add only the smallest focused schema/data/provider changes needed to represent outstanding vs completed/dismissed reminders correctly.
@@ -269,10 +317,21 @@ At minimum, tests must cover:
 ### Calendar grouping
 
 - `ppodolske@gmail.com` and `Home` events merge into Personal;
-- source identity between those two is not rendered;
+- source identity between those two is not rendered on the dashboard;
 - both holiday calendar sources map to Holidays;
 - calendar reminders map to Reminders;
 - completed/dismissed calendar reminders are excluded.
+
+### Full calendar view
+
+- `/calendar` requires authenticated owner access;
+- current month is the default view;
+- previous/next month navigation produces the expected Sydney month range;
+- timed, all-day, and multi-day events overlapping the visible month are included;
+- source display name/color may be shown without provider calendar IDs;
+- external event URL is rendered only when present;
+- full view reads cached data and does not trigger sync/provider calls;
+- unavailable calendar data produces a page-level empty/unavailable state rather than a server crash.
 
 ### Needs Attention
 
@@ -282,6 +341,13 @@ At minimum, tests must cover:
 - items shown in Overdue/Today are not duplicated in Life Admin Coming Up;
 - priority ordering is deterministic.
 
+### App launchers
+
+- each configured app renders its configured icon and app name;
+- launcher links point to the configured app URL;
+- status remains a secondary indicator;
+- missing/broken icon metadata uses the fallback presentation.
+
 ### Failure isolation
 
 - calendar-load failure still renders weather shell, Life Admin, birthdays, trips, and app navigation;
@@ -290,12 +356,13 @@ At minimum, tests must cover:
 
 ### Responsive/rendering contract
 
-Server-render tests should verify the expected semantic sections and links are present. Exact CSS-pixel layout should not be unit-tested.
+Server-render tests should verify the expected semantic sections, calendar navigation, app launcher metadata, and links are present. Exact CSS-pixel layout should not be unit-tested.
 
 ## Out of scope
 
-- editing calendar events from the dashboard;
+- editing calendar events from the dashboard or full calendar view;
 - creating or completing calendar reminders from preston.ai;
+- dragging/rescheduling events;
 - Gmail/email integration;
 - additional weather providers;
 - new Life Admin categories or reminder-engine behavior;
@@ -305,4 +372,4 @@ Server-render tests should verify the expected semantic sections and links are p
 
 ## Success criteria
 
-v0.11.0 is successful when the authenticated landing page functions as a compact daily operating view where, on a typical laptop screen, the user can see prominent weather, the near-term calendar, overdue/today actions, and most coming-up context with materially less scrolling than v0.10.x, while preserving existing privacy and reminder boundaries.
+v0.11.0 is successful when the authenticated landing page functions as a compact daily operating view where, on a typical laptop screen, the user can see prominent weather, the near-term calendar, overdue/today actions, and most coming-up context with materially less scrolling than v0.10.x; app shortcuts feel like polished app launchers using each app's own icon; and the Calendar briefing provides one-click access to a private full month view of all imported calendar events, while preserving existing privacy and reminder boundaries.
