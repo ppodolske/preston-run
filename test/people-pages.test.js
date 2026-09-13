@@ -19,10 +19,18 @@ assert.match(html, /Inactive/);
 assert.match(html, /\/people\/1\/edit/);
 assert.doesNotMatch(html, /ppodolske@gmail\.com/);
 
-const form = renderPersonFormPage({person:{id:'1',name:'Alice',relationship:'Friend',birthday_month:5,birthday_day:12,birth_year:'',notes:'Hello',active:false},mode:'edit',error:'Bad birthday'});
+const form = renderPersonFormPage({person:{id:'1',name:'Alice',relationship:'Friend',birthday_month:5,birthday_day:12,birth_year:'',notes:'Hello',active:false},mode:'edit',error:'Bad birthday',reminderSettings:{birthday_offsets:[30,14,7,1]},reminderOverride:null});
 assert.match(form, /action="\/people\/1"/);
 assert.match(form, /value="Alice"/);
 assert.match(form, /value="5"/);
 assert.match(form, /Bad birthday/);
 assert.doesNotMatch(form, /name="active" value="1" checked/);
+assert.match(form,/Use global defaults/);
+assert.match(form,/Custom reminders/);
+assert.match(form,/30, 14, 7, 1/);
+
+const custom = renderPersonFormPage({person:{id:'1',name:'Alice',active:true},mode:'edit',reminderSettings:{birthday_offsets:[30,14,7,1]},reminderOverride:{enabled:true,offsets:[10,2]}});
+assert.match(custom,/Custom reminders/);
+assert.match(custom,/10, 2/);
+assert.match(custom,/Restore defaults/);
 console.log('people page tests passed');
