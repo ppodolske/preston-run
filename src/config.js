@@ -19,6 +19,8 @@ function loadConfig(env = process.env) {
     googleCalendarClientId: required(env, 'GOOGLE_CALENDAR_CLIENT_ID'),
     googleCalendarClientSecret: required(env, 'GOOGLE_CALENDAR_CLIENT_SECRET'),
     calendarCredentialKey: required(env, 'CALENDAR_CREDENTIAL_KEY'),
+    doseScaleContextUrl: required(env, 'DOSE_SCALE_CONTEXT_URL').replace(/\/$/, ''),
+    doseScaleServiceToken: required(env, 'DOSE_SCALE_SERVICE_TOKEN'),
     isProduction: (env.NODE_ENV || 'development') === 'production'
   };
 }
