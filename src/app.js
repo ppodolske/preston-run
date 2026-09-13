@@ -10,6 +10,24 @@ const { handleCalendarsRoute } = require('./routes/calendars');
 const { handleGmailRoute } = require('./routes/gmail');
 const { handleSiteRoute } = require('./routes/site');
 const { text } = require('./http/respond');
+const { createGmailOAuth } = require('./services/gmail-oauth');
+const { createGmailManualScanDeps } = require('./services/gmail-manual-scan');
+const { upsertGmailConnection, getGmailConnection, markGmailDisconnected } = require('./data/gmail-connections');
+const { encryptCredential, decodeCredentialKey } = require('./security/credential-crypto');
+
+function createGmailDeps(config, overrides = {}) {
+  const key = () => decodeCredentialKey(config.calendarCredentialKey);
+  const productionDeps = {
+    googleOAuth: createGmailOAuth(config),
+    getGmailConnection,
+    markGmailDisconnected,
+    upsertGmailConnection,
+    encryptAccessToken(value) { return encryptCredential({ accessToken:value }, key()); },
+    encryptRefreshToken(value) { return encryptCredential({ refreshToken:value }, key()); },
+    ...createGmailManualScanDeps(config)
+  };
+  return { ...productionDeps, ...overrides };
+}
 
 function createApp(config, dependencies = {}) {
   const createSupabase = dependencies.createRequestSupabase || createRequestSupabase;
@@ -18,7 +36,7 @@ function createApp(config, dependencies = {}) {
     try { url = new URL(req.url, config.siteUrl); } catch { return text(res, 400, 'Bad request'); }
     if (serveStatic(req, res, url.pathname)) return;
     const supabase = createSupabase(req, res, config);
-    const context = { config, supabase, calendarDeps: dependencies.calendarDeps, gmailDeps: dependencies.gmailDeps };
+    const context = { config, supabase, calendarDeps: dependencies.calendarDeps, gmailDeps: createGmailDeps(config, dependencies.gmailDeps || {}) };
     if (await handleAuthRoute(req, res, context)) return;
     if (await handlePeopleRoute(req, res, context)) return;
     if (await handleLifeAdminRoute(req, res, context)) return;
@@ -31,4 +49,4 @@ function createApp(config, dependencies = {}) {
     text(res, 404, 'Not found', {'cache-control':'no-store'});
   };
 }
-module.exports = { createApp };
+module.exports = { createApp, createGmailDeps };
