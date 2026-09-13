@@ -6,6 +6,7 @@ const router=createGmailRouter({});
 assert.equal(typeof router,'function');
 assert.equal(isGmailPath('/me/settings/gmail'),true);
 assert.equal(isGmailPath('/me/settings/gmail/scan-now'),true);
+assert.equal(isGmailPath('/me/settings/gmail/activity/act1/undo'),true);
 assert.equal(isGmailPath('/me/settings'),false);
 
 let authArgs;
