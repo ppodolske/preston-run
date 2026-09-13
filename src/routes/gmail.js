@@ -17,6 +17,10 @@ function stateCookie(value,config,{clear=false}={}){const parts=[`${STATE_COOKIE
 function redirectCookie(res,location,cookie){res.writeHead(302,{location,'cache-control':'no-store','set-cookie':cookie});res.end();}
 function validOAuthState(expected,received){if(!expected||!received||expected.length<32)return false;const a=Buffer.from(expected),b=Buffer.from(received);return a.length===b.length&&crypto.timingSafeEqual(a,b);}
 function buildGmailAuthUrl(googleOAuth,config,state){return googleOAuth.buildAuthUrl({scope:[GMAIL_READONLY_SCOPE],redirectUri:config.gmail&&config.gmail.redirectUri,state});}
+function logGmailError(label,error){
+  const safe={message:error&&error.message,status:error&&error.status,name:error&&error.name};
+  console.error(`[gmail] ${label}`,safe);
+}
 function tokenEncryptors(deps){
   const encryptAccessToken=deps.encryptAccessToken||deps.encrypt;
   const encryptRefreshToken=deps.encryptRefreshToken||deps.encrypt;
@@ -54,7 +58,8 @@ async function handleGmailRoute(req,res,context){
       const scanHistory=deps.listRecentScans?await deps.listRecentScans(supabase,user.id):await listRecentScans(supabase,user.id);
       const latestScan=scanHistory[0]||null;
       privateHtml(res,200,renderGmailSettingsPage({connection,scanHistory,latestScan,csrfToken:'',flash:url.searchParams.get('connected')?'Gmail connected. Start the first scan when ready.':url.searchParams.get('scan')?'Gmail scan started.':url.searchParams.get('undo')?'Gmail update undone.':null}));
-    }catch{
+    }catch(error){
+      logGmailError('settings failed',error);
       privateHtml(res,500,renderGmailSettingsPage({connection:null,scanHistory:[],latestScan:null,csrfToken:'',flash:'Gmail settings are temporarily unavailable.'}));
     }
     return true;
@@ -67,7 +72,7 @@ async function handleGmailRoute(req,res,context){
     try{
       await completeGmailOAuthCallback({supabase,userId:user.id,code,config,googleOAuth:deps.googleOAuth,encryptAccessToken:encryptors.encryptAccessToken,encryptRefreshToken:encryptors.encryptRefreshToken,upsertGmailConnection:deps.upsertGmailConnection,startScanNow:deps.startScanNow});
       redirectCookie(res,'/me/settings/gmail?connected=1',stateCookie('',config,{clear:true}));
-    }catch{ text(res,500,'Unable to connect Gmail',{'cache-control':'no-store'}); }
+    }catch(error){ logGmailError('callback failed',error); text(res,500,'Unable to connect Gmail',{'cache-control':'no-store'}); }
     return true;
   }
   if(req.method!=='POST'){text(res,405,'Method not allowed',{'cache-control':'no-store'});return true;}
@@ -80,17 +85,17 @@ async function handleGmailRoute(req,res,context){
     return true;
   }
   if(url.pathname==='/me/settings/gmail/disconnect'){
-    try{const connection=deps.getGmailConnection?await deps.getGmailConnection(supabase,user.id):await getGmailConnection(supabase,user.id);if(connection)await (deps.markGmailDisconnected||markGmailDisconnected)(supabase,user.id,connection.id);redirect(res,'/me/settings/gmail');}catch{text(res,500,'Unable to disconnect Gmail',{'cache-control':'no-store'});}return true;
+    try{const connection=deps.getGmailConnection?await deps.getGmailConnection(supabase,user.id):await getGmailConnection(supabase,user.id);if(connection)await (deps.markGmailDisconnected||markGmailDisconnected)(supabase,user.id,connection.id);redirect(res,'/me/settings/gmail');}catch(error){logGmailError('disconnect failed',error);text(res,500,'Unable to disconnect Gmail',{'cache-control':'no-store'});}return true;
   }
   if(url.pathname==='/me/settings/gmail/scan-now'){
-    try{if(!deps.startScanNow)throw new Error('Gmail manual scan is not configured');await deps.startScanNow(supabase,user.id);redirect(res,'/me/settings/gmail?scan=1');}catch{text(res,500,'Unable to start Gmail scan',{'cache-control':'no-store'});}return true;
+    try{if(!deps.startScanNow)throw new Error('Gmail manual scan is not configured');await deps.startScanNow(supabase,user.id);redirect(res,'/me/settings/gmail?scan=1');}catch(error){logGmailError('manual scan failed',error);text(res,500,'Unable to start Gmail scan',{'cache-control':'no-store'});}return true;
   }
   if(url.pathname==='/me/settings/gmail/retry-failed'){
-    try{if(!deps.retryFailedGmailItems)throw new Error('Gmail retry is not configured');await deps.retryFailedGmailItems(supabase,user.id);redirect(res,'/me/settings/gmail?scan=1');}catch{text(res,500,'Unable to retry Gmail items',{'cache-control':'no-store'});}return true;
+    try{if(!deps.retryFailedGmailItems)throw new Error('Gmail retry is not configured');await deps.retryFailedGmailItems(supabase,user.id);redirect(res,'/me/settings/gmail?scan=1');}catch(error){logGmailError('retry failed',error);text(res,500,'Unable to retry Gmail items',{'cache-control':'no-store'});}return true;
   }
   const undo=url.pathname.match(/^\/me\/settings\/gmail\/activity\/([^/]+)\/undo$/);
   if(undo){
-    try{await (deps.undoGmailActivity||undoGmailActivity)(supabase,user.id,decodeURIComponent(undo[1]),deps.undoOptions||{});redirect(res,'/me/settings/gmail?undo=1');}catch{text(res,500,'Unable to undo Gmail update',{'cache-control':'no-store'});}return true;
+    try{await (deps.undoGmailActivity||undoGmailActivity)(supabase,user.id,decodeURIComponent(undo[1]),deps.undoOptions||{});redirect(res,'/me/settings/gmail?undo=1');}catch(error){logGmailError('undo failed',error);text(res,500,'Unable to undo Gmail update',{'cache-control':'no-store'});}return true;
   }
   text(res,404,'Not found',{'cache-control':'no-store'});return true;
 }
