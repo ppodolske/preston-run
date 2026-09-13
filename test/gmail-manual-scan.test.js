@@ -26,6 +26,20 @@ const {startManualGmailScan,createGmailPersistenceAdapters,createGmailManualScan
   assert.equal(typeof runnerArgs.lifeAdminActions.createLifeAdminItem,'function');
   assert.equal(typeof runnerArgs.lifeAdminActions.createReviewItem,'function');
 
+  let freshProviderToken=null;
+  let resolverCalls=0;
+  await startManualGmailScan({db:true},'user1',{gmail:{clientId:'client1',clientSecret:'secret1',redirectUri:'https://preston.run/me/settings/gmail/callback',scannerVersion:'scanner1',parserVersion:'parser1',initialLookbackMonths:12},calendarCredentialKey:'key1'}, {
+    credentialKey:'key1',
+    getGmailConnection:async()=>({id:'conn1',status:'connected',gmail_account_email:'me@example.com',access_token_ciphertext:'enc-old',refresh_token_ciphertext:'enc-refresh'}),
+    decryptCredential:()=>({accessToken:'stale-access'}),
+    resolveGmailAccessToken:async args=>{resolverCalls+=1;assert.equal(args.connection.id,'conn1');return 'fresh-access';},
+    createGmailProvider:args=>{freshProviderToken=args.accessToken;return {provider:true};},
+    listTrips:async()=>[],
+    runGmailScan:async()=>({status:'succeeded'})
+  });
+  assert.equal(resolverCalls,1);
+  assert.equal(freshProviderToken,'fresh-access');
+
   const reviewCalls=[];
   const reviewLifeActions={createLifeAdminItem:async()=>null,createReviewItem:async(source,classification)=>{reviewCalls.push({source,classification});return{id:'life-review-1'};}};
   let reviewRunnerArgs=null;
@@ -47,4 +61,4 @@ const {startManualGmailScan,createGmailPersistenceAdapters,createGmailManualScan
   const deps=createGmailManualScanDeps({gmail:{scannerVersion:'scanner1',parserVersion:'parser1',initialLookbackMonths:12},calendarCredentialKey:'key1'},{credentialKey:'key1'});
   assert.equal(typeof deps.startScanNow,'function');
   console.log('gmail manual scan tests passed');
-})();
+})().catch(error=>{console.error(error);process.exit(1);});
