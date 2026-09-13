@@ -3,7 +3,10 @@ const { renderLoginPage } = require('../pages/login');
 const { renderHomePage } = require('../pages/home');
 const { getAuthorizedOwner } = require('../auth/guard');
 const { listPeople } = require('../data/people');
+const { listLifeItems } = require('../data/life-admin');
+const { listTasks } = require('../data/tasks');
 const { getUpcomingBirthdays, todayInTimeZone } = require('../domain/birthdays');
+const { getComingUpLifeItems, getNeedsAttention } = require('../domain/life-admin');
 const { APPS, VERSION } = require('../branding');
 
 async function probe(url) {
@@ -43,13 +46,24 @@ async function handleSiteRoute(req, res, context) {
     if (auth.user) {
       let upcomingBirthdays = [];
       let birthdayDataUnavailable = false;
+      let upcomingLifeItems = [];
+      let needsAttention = [];
+      let lifeAdminDataUnavailable = false;
       try {
         const people = await listPeople(supabase);
         upcomingBirthdays = getUpcomingBirthdays(people, todayInTimeZone('Australia/Sydney'), 90);
       } catch {
         birthdayDataUnavailable = true;
       }
-      html(res, 200, renderHomePage({ user:auth.user, upcomingBirthdays, birthdayDataUnavailable }), { 'cache-control':'private, no-store' });
+      try {
+        const [lifeItems, tasks] = await Promise.all([listLifeItems(supabase), listTasks(supabase)]);
+        const now = new Date();
+        upcomingLifeItems = getComingUpLifeItems(lifeItems, now, 90);
+        needsAttention = getNeedsAttention({ lifeItems, tasks, now });
+      } catch {
+        lifeAdminDataUnavailable = true;
+      }
+      html(res, 200, renderHomePage({ user:auth.user, upcomingBirthdays, birthdayDataUnavailable, upcomingLifeItems, needsAttention, lifeAdminDataUnavailable }), { 'cache-control':'private, no-store' });
       return true;
     }
     if (auth.reason === 'not_owner') {
