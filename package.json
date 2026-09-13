@@ -1,6 +1,6 @@
 {
   "name": "preston-run",
-  "version": "0.12.0",
+  "version": "0.12.1",
   "private": true,
   "main": "server.js",
   "scripts": {
