@@ -9,12 +9,15 @@ const ALLOWED = new Map([
   ['/icons/apple-touch-icon.png', 'icons/apple-touch-icon.png'],
   ['/icons/icon-192.png', 'icons/icon-192.png'],
   ['/icons/icon-512.png', 'icons/icon-512.png'],
-  ['/icons/icon-maskable-512.png', 'icons/icon-maskable-512.png']
+  ['/icons/icon-maskable-512.png', 'icons/icon-maskable-512.png'],
+  ['/sw.js','sw.js'],
+  ['/notifications.js','notifications.js']
 ]);
 
 function contentType(file) {
   if (file.endsWith('.png')) return 'image/png';
   if (file.endsWith('.webmanifest')) return 'application/manifest+json; charset=utf-8';
+  if (file.endsWith('.js')) return 'application/javascript; charset=utf-8';
   return 'application/octet-stream';
 }
 
@@ -26,7 +29,8 @@ function serveStatic(req, res, pathname) {
   if (!file.startsWith(PUBLIC_ROOT + path.sep)) return false;
   let data;
   try { data = fs.readFileSync(file); } catch { return false; }
-  res.writeHead(200, {'content-type':contentType(file), 'cache-control':'public,max-age=86400,immutable'});
+  const cacheControl=pathname==='/sw.js'?'no-cache':'public,max-age=86400,immutable';
+  res.writeHead(200, {'content-type':contentType(file), 'cache-control':cacheControl});
   res.end(data);
   return true;
 }
