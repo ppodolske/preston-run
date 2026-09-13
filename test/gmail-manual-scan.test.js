@@ -21,10 +21,12 @@ const {startManualGmailScan,createGmailPersistenceAdapters,createGmailManualScan
   assert.equal(runnerArgs.connection.id,'conn1');
   assert.equal(runnerArgs.existingTrips[0].id,'trip1');
   assert.equal(typeof runnerArgs.persistence.startScan,'function');
+  assert.equal(typeof runnerArgs.persistence.updateScanProgress,'function');
   assert.equal(typeof runnerArgs.actions.createGmailReviewItem,'function');
 
   const adapters=createGmailPersistenceAdapters({supabase:{},userId:'user1',connection:{id:'conn1'}});
-  for(const key of ['startScan','upsertSource','insertFacts','finishScan','failScan','findExistingSource'])assert.equal(typeof adapters[key],'function');
+  for(const key of ['startScan','upsertSource','insertFacts','finishScan','failScan','findExistingSource','updateScanProgress'])assert.equal(typeof adapters[key],'function');
+  assert.equal(Object.hasOwn(adapters,'updateProgress'),false,'adapter name must match runner hook updateScanProgress');
   const deps=createGmailManualScanDeps({gmail:{scannerVersion:'scanner1',parserVersion:'parser1',initialLookbackMonths:12},calendarCredentialKey:'key1'},{credentialKey:'key1'});
   assert.equal(typeof deps.startScanNow,'function');
   console.log('gmail manual scan tests passed');
