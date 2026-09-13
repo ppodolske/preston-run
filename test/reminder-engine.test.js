@@ -2,13 +2,14 @@ const assert=require('node:assert/strict');
 const {runMorningSummary,runUrgentCheck}=require('../src/services/reminder-engine');
 
 function deps(overrides={}){
-  const calls={sent:[],occurrences:[],deliveries:[],failures:[]};
+  const calls={sent:[],occurrences:[],deliveries:[],failures:[],calendar:0};
   return {calls,
     listPeople:async()=>[],listLifeItems:async()=>[],listTasks:async()=>[],listTrips:async()=>[],
     getSettings:async()=>({birthday_offsets:[30,14,7,1],renewal_offsets:[60,30,14,7,1],deadline_offsets:[14,7,3,0],appointment_offsets:[7,1,0],trip_offsets:[14,7,1]}),
     getOverride:async()=>null,listSubscriptions:async()=>[{id:'d1',endpoint:'e1',p256dh:'p',auth_secret:'a',active:true},{id:'d2',endpoint:'e2',p256dh:'p',auth_secret:'a',active:true}],
     getOccurrence:async()=>null,upsertOccurrence:async(_s,_u,row)=>{const saved={id:'r'+(calls.occurrences.length+1),...row};calls.occurrences.push(saved);return saved;},
     markSent:async()=>{},recordDelivery:async(_s,_u,row)=>{calls.deliveries.push(row);},markSubscriptionFailure:async(_s,_u,id,row)=>{calls.failures.push({id,...row});},
+    getCalendarDigest:async()=>{calls.calendar++;return{events:[],attentionNeeded:false};},
     ...overrides};
 }
 function transport(calls,handler){return{send:async(subscription,payload)=>{calls.sent.push({subscription,payload});if(handler)return handler(subscription,payload);return{statusCode:201};}};}
@@ -23,22 +24,32 @@ function transport(calls,handler){return{send:async(subscription,payload)=>{call
   const result=await runMorningSummary({supabase:{},userId:'u1',now:new Date('2026-09-12T21:05:00Z'),pushTransport:transport(d.calls),deps:d});
   assert.equal(result.sent,true);assert.equal(d.calls.sent.length,2,'one logical summary should fan out to two devices');
   assert.match(d.calls.sent[0].payload.body,/Alice/);assert.match(d.calls.sent[0].payload.body,/Renew licence/);assert.match(d.calls.sent[0].payload.body,/Submit form/);assert.match(d.calls.sent[0].payload.body,/Melbourne/);
-  assert.equal(d.calls.sent[0].payload.tag,'preston-daily-2026-09-13');assert.equal(d.calls.sent[0].payload.url,'/');
+  assert.equal(d.calls.sent[0].payload.tag,'preston-daily-2026-09-13');assert.equal(d.calls.sent[0].payload.url,'/');assert.equal(d.calls.calendar,1,'morning summary should read calendar digest once');
+
+  const calendarOnly=deps({getCalendarDigest:async()=>{calendarOnly.calls.calendar++;return{events:[{title:'Breakfast',all_day:false,starts_at:'2026-09-12T22:00:00Z',status:'confirmed'}],attentionNeeded:false};}});
+  let calendarOnlyResult=await runMorningSummary({supabase:{},userId:'u1',now:new Date('2026-09-12T21:05:00Z'),pushTransport:transport(calendarOnly.calls),deps:calendarOnly});
+  assert.equal(calendarOnlyResult.sent,true);assert.equal(calendarOnly.calls.occurrences.length,1);assert.equal(calendarOnly.calls.occurrences[0].occurrence_key,'daily-summary:2026-09-13');assert.match(calendarOnly.calls.sent[0].payload.body,/Calendar:/);assert.match(calendarOnly.calls.sent[0].payload.body,/Breakfast/);
+
+  const mixed=deps({listTasks:async()=>[{id:'k1',title:'Submit form',status:'open',priority:'high',due_at:'2026-09-16T00:00:00Z'}],getCalendarDigest:async()=>{mixed.calls.calendar++;return{events:[{title:'Tentative lunch',all_day:false,starts_at:'2026-09-13T02:00:00Z',status:'tentative'}],attentionNeeded:false};}});
+  const mixedResult=await runMorningSummary({supabase:{},userId:'u1',now:new Date('2026-09-12T21:05:00Z'),pushTransport:transport(mixed.calls),deps:mixed});assert.equal(mixedResult.sent,true);assert.equal(mixed.calls.occurrences.length,1,'mixed content must use one logical summary');assert.match(mixed.calls.sent[0].payload.body,/Submit form/);assert.match(mixed.calls.sent[0].payload.body,/Calendar:/);assert.match(mixed.calls.sent[0].payload.body,/Tentative lunch \(tentative\)/);
+
+  const attention=deps({getCalendarDigest:async()=>{attention.calls.calendar++;return{events:[],attentionNeeded:true};}});
+  const attentionResult=await runMorningSummary({supabase:{},userId:'u1',now:new Date('2026-09-12T21:05:00Z'),pushTransport:transport(attention.calls),deps:attention});assert.equal(attentionResult.sent,true);assert.match(attention.calls.sent[0].payload.body,/Calendar: sync needs attention/);
 
   const custom=deps({listPeople:async()=>[{id:'p1',name:'Alice',active:true,birthday_month:9,birthday_day:20}],getOverride:async(_s,_u,type,id)=>type==='person'&&id==='p1'?{enabled:true,offsets:[2]}:null});
   const noCustom=await runMorningSummary({supabase:{},userId:'u1',now:new Date('2026-09-12T21:05:00Z'),pushTransport:transport(custom.calls),deps:custom});
   assert.equal(noCustom.sent,false);assert.equal(custom.calls.sent.length,0,'custom offsets replace defaults');
 
-  const empty=deps();const emptyResult=await runMorningSummary({supabase:{},userId:'u1',now:new Date('2026-09-12T21:05:00Z'),pushTransport:transport(empty.calls),deps:empty});assert.equal(emptyResult.sent,false);
+  const empty=deps();const emptyResult=await runMorningSummary({supabase:{},userId:'u1',now:new Date('2026-09-12T21:05:00Z'),pushTransport:transport(empty.calls),deps:empty});assert.equal(emptyResult.sent,false);assert.equal(empty.calls.calendar,1);
 
   const normal=deps({listTasks:async()=>[{id:'k1',title:'Normal overdue',status:'open',priority:'normal',due_at:'2026-09-10T00:00:00Z'}]});
-  const normalResult=await runUrgentCheck({supabase:{},userId:'u1',now:new Date('2026-09-13T02:00:00Z'),mode:'noon',pushTransport:transport(normal.calls),deps:normal});assert.equal(normalResult.sent,false);assert.equal(normal.calls.sent.length,0);
+  const normalResult=await runUrgentCheck({supabase:{},userId:'u1',now:new Date('2026-09-13T02:00:00Z'),mode:'noon',pushTransport:transport(normal.calls),deps:normal});assert.equal(normalResult.sent,false);assert.equal(normal.calls.sent.length,0);assert.equal(normal.calls.calendar,0,'noon urgent check must not load calendar data');
 
   const urgent=deps({listTasks:async()=>[{id:'k2',title:'Urgent payment',status:'open',priority:'urgent',due_at:'2026-09-13T00:00:00Z'}]});
-  const urgentResult=await runUrgentCheck({supabase:{},userId:'u1',now:new Date('2026-09-13T02:00:00Z'),mode:'noon',pushTransport:transport(urgent.calls),deps:urgent});assert.equal(urgentResult.sent,true);assert.equal(urgent.calls.sent.length,2);assert.match(urgent.calls.sent[0].payload.body,/Urgent payment/);
+  const urgentResult=await runUrgentCheck({supabase:{},userId:'u1',now:new Date('2026-09-13T02:00:00Z'),mode:'noon',pushTransport:transport(urgent.calls),deps:urgent});assert.equal(urgentResult.sent,true);assert.equal(urgent.calls.sent.length,2);assert.match(urgent.calls.sent[0].payload.body,/Urgent payment/);assert.equal(urgent.calls.calendar,0);
 
   const dedup=deps({listTasks:async()=>[{id:'k2',title:'Urgent payment',status:'open',priority:'urgent',due_at:'2026-09-13T00:00:00Z'}],getOccurrence:async()=>({id:'existing',status:'sent'})});
-  const dedupResult=await runUrgentCheck({supabase:{},userId:'u1',now:new Date('2026-09-13T08:00:00Z'),mode:'evening',pushTransport:transport(dedup.calls),deps:dedup});assert.equal(dedupResult.sent,false);assert.equal(dedup.calls.sent.length,0);
+  const dedupResult=await runUrgentCheck({supabase:{},userId:'u1',now:new Date('2026-09-13T08:00:00Z'),mode:'evening',pushTransport:transport(dedup.calls),deps:dedup});assert.equal(dedupResult.sent,false);assert.equal(dedup.calls.sent.length,0);assert.equal(dedup.calls.calendar,0,'evening urgent check must not load calendar data');
   const ack=deps({listTasks:async()=>[{id:'k2',title:'Urgent payment',status:'open',priority:'urgent'}],getOccurrence:async()=>({id:'existing',status:'acknowledged'})});
   assert.equal((await runUrgentCheck({supabase:{},userId:'u1',now:new Date('2026-09-13T02:00:00Z'),mode:'noon',pushTransport:transport(ack.calls),deps:ack})).sent,false);
 
