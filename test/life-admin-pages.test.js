@@ -1,0 +1,14 @@
+const assert=require('node:assert/strict');
+const {renderLifeAdminPage,renderLifeItemPage,renderLifeItemFormPage,renderTaskFormPage}=require('../src/pages/life-admin');
+const people=[{id:'p1',name:'Alice <Friend>'}];
+const items=[{id:'l1',title:'Licence <renewal>',category:'renewal',status:'needs_action',due_at:'2026-09-12T00:00:00Z',starts_at:null,priority:'urgent',notes:'Pay & submit',linked_person_id:'p1'}];
+const tasks=[{id:'t1',title:'Upload form',status:'open',due_at:'2026-09-11T00:00:00Z',priority:'high',linked_life_item_id:'l1'}];
+const attention=[{type:'life_item',record:items[0],overdue:true},{type:'task',record:tasks[0],overdue:true}];
+const coming=[{item:{...items[0],due_at:'2026-09-20T00:00:00Z',status:'upcoming'},date:new Date('2026-09-20T00:00:00Z'),daysAway:7}];
+const html=renderLifeAdminPage({lifeItems:items,tasks,people,filter:'renewal',needsAttention:attention,comingUp:coming,flash:'Saved'});
+for(const text of ['Life Admin','Needs Attention','Coming Up','Renewals','Add item','Add task','Licence &lt;renewal&gt;','Pay &amp; submit','Alice &lt;Friend&gt;','Overdue','Urgent'])assert.ok(html.includes(text),`missing ${text}`);
+assert.ok(!html.includes('ppodolske@gmail.com'));
+const detail=renderLifeItemPage({item:items[0],linkedTasks:tasks,person:people[0]});assert.match(detail,/Upload form/);assert.match(detail,/Add task/);assert.match(detail,/Edit item/);
+const form=renderLifeItemFormPage({item:items[0],people,mode:'edit',error:'Bad date'});assert.match(form,/action="\/life-admin\/l1"/);assert.match(form,/value="2026-09-12"/);assert.match(form,/Bad date/);
+const taskForm=renderTaskFormPage({task:tasks[0],lifeItems:items,people,mode:'edit'});assert.match(taskForm,/action="\/tasks\/t1"/);assert.match(taskForm,/value="l1" selected/);
+console.log('Life Admin page tests passed');
