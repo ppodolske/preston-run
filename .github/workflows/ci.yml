@@ -25,5 +25,10 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm test
       - run: node --check server.js
+      - run: node --check src/pages/home.js
+      - run: node --check src/pages/calendar-view.js
+      - run: node --check src/routes/site.js
+      - run: node --check src/routes/calendars.js
+      - run: node --check src/domain/calendars.js
       - run: node --check src/jobs/reminders.js
       - run: node --check src/jobs/calendar-sync.js
