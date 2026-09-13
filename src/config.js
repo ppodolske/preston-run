@@ -10,6 +10,14 @@ function loadConfig(env = process.env) {
   const siteUrl = required(env, 'SITE_URL').replace(/\/$/, '');
   const doseScaleContextUrl = String(env.DOSE_SCALE_CONTEXT_URL || '').trim().replace(/\/$/, '');
   const doseScaleServiceToken = String(env.DOSE_SCALE_SERVICE_TOKEN || '');
+  const gmail = {
+    clientId: String(env.GMAIL_CLIENT_ID || ''),
+    clientSecret: String(env.GMAIL_CLIENT_SECRET || ''),
+    redirectUri: String(env.GMAIL_REDIRECT_URI || ''),
+    scannerVersion: 'gmail-scanner-v0.12.0',
+    parserVersion: 'gmail-parser-v0.12.0',
+    initialLookbackMonths: 12
+  };
   return {
     port,
     nodeEnv: env.NODE_ENV || 'development',
@@ -23,6 +31,7 @@ function loadConfig(env = process.env) {
     calendarCredentialKey: required(env, 'CALENDAR_CREDENTIAL_KEY'),
     doseScaleContextUrl,
     doseScaleServiceToken,
+    gmail,
     isProduction: (env.NODE_ENV || 'development') === 'production'
   };
 }
