@@ -25,3 +25,17 @@ jobs:
       - run: npm test
       - run: node --check server.js
       - run: node --check src/jobs/reminders.js
+
+  v010-lockfile:
+    if: github.ref == 'refs/heads/build/preston-ai-v0.10.0' && startsWith(github.event.head_commit.message, 'build: generate parser lockfile in CI')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --package-lock-only --save-exact fast-xml-parser@5.11.1 ical.js@2.2.1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v010-package-lock
+          path: package-lock.json
