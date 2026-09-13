@@ -10,7 +10,8 @@ assert.throws(()=>validateLifeItemInput({title:'x',priority:'critical'}), /Prior
 assert.throws(()=>validateTaskInput({title:'x',status:'upcoming'}), /Status/);
 const item=validateLifeItemInput({title:'  Licence renewal ',category:'renewal',status:'upcoming',due_at:'2026-10-01',priority:'high',notes:'  do this ',linked_person_id:''});
 assert.equal(item.title,'Licence renewal');assert.equal(item.due_at,'2026-10-01T00:00:00.000Z');assert.equal(item.linked_person_id,null);assert.equal(item.notes,'do this');
-const task=validateTaskInput({title:'Renew licence',status:'open',due_at:'2026-09-10',priority:'urgent'});assert.equal(task.priority,'urgent');
+const task=validateTaskInput({title:'Renew licence',status:'open',due_at:'2026-09-10',priority:'urgent',linked_trip_id:'trip1'});assert.equal(task.priority,'urgent');assert.equal(task.linked_trip_id,'trip1');
+const emptyTrip=validateTaskInput({title:'No trip',status:'open',priority:'normal',linked_trip_id:''});assert.equal(emptyTrip.linked_trip_id,null);
 const now=new Date('2026-09-13T00:00:00Z');
 assert.equal(isOverdue({status:'upcoming',due_at:'2026-09-12T00:00:00Z'},now),true);
 assert.equal(isOverdue({status:'upcoming',due_at:'2026-09-13T00:00:00Z'},new Date('2026-09-13T10:00:00Z')),false);
