@@ -1,5 +1,6 @@
 const assert=require('node:assert/strict');
 const {getCalendarMonthWindow,buildCalendarMonth}=require('../src/domain/calendars');
+const {renderCalendarViewPage}=require('../src/pages/calendar-view');
 
 const window=getCalendarMonthWindow('2026-09',new Date('2026-09-12T22:00:00Z'));
 assert.equal(window.monthKey,'2026-09');
@@ -62,5 +63,17 @@ assert.equal(workout.startDate,'2026-09-13');
 assert.equal(workout.sourceType,'planned_workout');
 assert.equal(Object.prototype.hasOwnProperty.call(workout,'provider_calendar_id'),false);
 assert.equal(Object.prototype.hasOwnProperty.call(workout,'providerCalendarId'),false);
+
+const html=renderCalendarViewPage({month});
+assert.match(html,/href="\/preston\.css"/);
+assert.match(html,/class="site-header"/);
+assert.match(html,/class="calendar-month-grid"/);
+assert.match(html,/class="calendar-agenda"/);
+assert.match(html,/class="agenda-day"[^>]*data-date="2026-09-15"/);
+assert.match(html,/Dinner/);
+assert.match(html,/Location: Sydney/);
+assert.doesNotMatch(html,/📍/);
+assert.doesNotMatch(html,/class="agenda-day"[^>]*data-date="2026-09-14"/,'empty days should not render in the mobile agenda');
+assert.match(html,/Calendar Settings/);
 
 console.log('calendar view tests passed');
