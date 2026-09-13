@@ -8,6 +8,8 @@ function loadConfig(env = process.env) {
   const port = Number(env.PORT || 3000);
   if (!Number.isInteger(port) || port < 1) throw new Error('PORT must be a positive integer');
   const siteUrl = required(env, 'SITE_URL').replace(/\/$/, '');
+  const doseScaleContextUrl = String(env.DOSE_SCALE_CONTEXT_URL || '').trim().replace(/\/$/, '');
+  const doseScaleServiceToken = String(env.DOSE_SCALE_SERVICE_TOKEN || '');
   return {
     port,
     nodeEnv: env.NODE_ENV || 'development',
@@ -19,8 +21,8 @@ function loadConfig(env = process.env) {
     googleCalendarClientId: required(env, 'GOOGLE_CALENDAR_CLIENT_ID'),
     googleCalendarClientSecret: required(env, 'GOOGLE_CALENDAR_CLIENT_SECRET'),
     calendarCredentialKey: required(env, 'CALENDAR_CREDENTIAL_KEY'),
-    doseScaleContextUrl: required(env, 'DOSE_SCALE_CONTEXT_URL').replace(/\/$/, ''),
-    doseScaleServiceToken: required(env, 'DOSE_SCALE_SERVICE_TOKEN'),
+    doseScaleContextUrl,
+    doseScaleServiceToken,
     isProduction: (env.NODE_ENV || 'development') === 'production'
   };
 }
