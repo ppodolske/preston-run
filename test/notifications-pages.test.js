@@ -8,16 +8,23 @@ const html=renderNotificationsPage({
   history:[{id:'d1',status:'delivered',attempted_at:'2026-09-13T00:00:00Z',error_category:null}]
 });
 assert.match(html,/Notifications/);
+assert.match(html,/href="\/preston\.css"/);
+assert.match(html,/class="site-header"/);
 assert.match(html,/Enable notifications on this device/);
 assert.match(html,/data-enable-notifications/);
 assert.match(html,/data-vapid-public-key="PUBLIC_ONLY"/);
-assert.match(html,/7:05/);
+assert.match(html,/07:05/);
 assert.match(html,/12:00/);
 assert.match(html,/18:00/);
 assert.match(html,/Australia\/Sydney/);
 assert.match(html,/iPhone/);
 assert.match(html,/Birthday/);
-assert.match(html,/30, 14, 7, 1/);
+assert.match(html,/class="offset-chip"/);
+assert.match(html,/name="birthday_offsets"[^>]*value="30"/);
+assert.match(html,/name="birthday_offsets"[^>]*value="1"/);
+assert.doesNotMatch(html,/30, 14, 7, 1/,'offsets should not be a comma-separated text field');
+assert.match(html,/type="time"[^>]*name="quiet_hours_start"[^>]*value="22:00"/);
+assert.match(html,/type="time"[^>]*name="quiet_hours_end"[^>]*value="07:00"/);
 assert.doesNotMatch(html,/https:\/\/secret\.example|secret-key|secret-auth/);
 assert.match(html,/\/notifications\.js/);
 console.log('notifications page tests passed');
