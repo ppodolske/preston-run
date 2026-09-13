@@ -34,11 +34,29 @@ const dashboard=buildDashboardCalendar({sources,events:[
   event('r2','reminders','Cancelled reminder','2026-09-13T06:00:00Z','cancelled'),
   event('r3','reminders','Declined reminder','2026-09-13T07:00:00Z','confirmed','declined'),
   event('x1','ignored','Ignored','2026-09-13T08:00:00Z')
+],plannedWorkouts:[
+  {id:'pw-today',date:'2026-09-13',name:'Workout A',sport:'strength',durationMinutes:45},
+  {id:'pw-tomorrow',date:'2026-09-14',name:'Easy Run',sport:'running',durationMinutes:35,distanceKm:5},
+  {id:'pw-later',date:'2026-09-20',name:'Long Run',sport:'running'}
+],actualActivities:[
+  {date:'2026-09-13',name:'Workout A',type:'lift',durationMinutes:47}
 ],now});
 assert.deepEqual(dashboard.personal.map(x=>x.title),['Google item','Home item']);
 assert.deepEqual(dashboard.holidays.map(x=>x.title),['AU holiday','US holiday']);
 assert.deepEqual(dashboard.reminders.map(x=>x.title),['Outstanding reminder']);
 assert.ok(dashboard.personal.every(x=>!Object.hasOwn(x,'sourceName')&&!Object.hasOwn(x,'provider_calendar_id')),'Personal display model must hide source identity');
 assert.ok(!dashboard.personal.some(x=>x.title==='Ignored')&&!dashboard.holidays.some(x=>x.title==='Ignored')&&!dashboard.reminders.some(x=>x.title==='Ignored'));
+assert.equal(dashboard.plannedWorkouts.length,2,'dashboard only includes today and tomorrow planned workouts');
+assert.equal(dashboard.plannedWorkouts[0].day,'today');
+assert.equal(dashboard.plannedWorkouts[0].title,'Workout A');
+assert.equal(dashboard.plannedWorkouts[0].completed,true,'today plan remains visible after matching actual activity');
+assert.equal(dashboard.plannedWorkouts[0].completionKnown,true);
+assert.equal(dashboard.plannedWorkouts[1].day,'tomorrow');
+assert.equal(dashboard.plannedWorkouts[1].completed,false);
+assert.equal(dashboard.plannedWorkouts[1].completionKnown,false);
+
+const ambiguous=buildDashboardCalendar({plannedWorkouts:[{id:'pw-other',date:'2026-09-13',name:'Workout B',sport:'strength'}],actualActivities:[{date:'2026-09-13',name:'Workout A',type:'lift'}],now});
+assert.equal(ambiguous.plannedWorkouts[0].completed,false,'some same-day activity must not imply planned workout completion');
+assert.equal(ambiguous.plannedWorkouts[0].completionKnown,false,'unmatched completion remains unknown');
 
 console.log('calendar dashboard tests passed');
