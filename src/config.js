@@ -10,7 +10,6 @@ function loadConfig(env = process.env) {
   const siteUrl = required(env, 'SITE_URL').replace(/\/$/, '');
   const doseScaleContextUrl = String(env.DOSE_SCALE_CONTEXT_URL || '').trim().replace(/\/$/, '');
   const doseScaleServiceToken = String(env.DOSE_SCALE_SERVICE_TOKEN || '');
-  const supabaseServiceRoleKey = String(env.SUPABASE_SERVICE_ROLE_KEY || '');
   const uatAuthEnabled = String(env.UAT_AUTH_ENABLED || '').trim().toLowerCase() === 'true';
   const uatBasicUser = String(env.UAT_BASIC_USER || '');
   const uatBasicPassword = String(env.UAT_BASIC_PASSWORD || '');
@@ -33,7 +32,6 @@ function loadConfig(env = process.env) {
     siteUrl,
     supabaseUrl: required(env, 'SUPABASE_URL'),
     supabasePublishableKey: required(env, 'SUPABASE_PUBLISHABLE_KEY'),
-    supabaseServiceRoleKey,
     ownerGoogleEmail: required(env, 'OWNER_GOOGLE_EMAIL').trim().toLowerCase(),
     vapidPublicKey: required(env, 'VAPID_PUBLIC_KEY'),
     googleCalendarClientId: required(env, 'GOOGLE_CALENDAR_CLIENT_ID'),
