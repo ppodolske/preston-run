@@ -20,7 +20,7 @@ function stateCookie(value,config,{clear=false}={}){const parts=[`${STATE_COOKIE
 function redirectCookie(res,location,cookie){res.writeHead(302,{location,'cache-control':'no-store','set-cookie':cookie});res.end();}
 function privateHtml(res,body){html(res,200,body,{'cache-control':'private, no-store'});}
 function normalizedSources(rows=[]){return rows.map(row=>({provider_calendar_id:String(row.id||row.href||''),display_name:String(row.name||row.id||row.href||'Calendar'),color:row.color||null,read_only:row.readOnly!==false})).filter(row=>row.provider_calendar_id);}
-function keyFor(config,deps){return deps.encryptCredential?config.calendarCredentialKey:decodeCredentialKey(config.calendarCredentialKey);}
+function keyFor(config){return decodeCredentialKey(config.calendarCredentialKey);}
 function providerStatusCode(error){const match=String(error&&error.message||'').match(/\((\d{3})\)\s*$/);return match?Number(match[1]):null;}
 function reportCalendarError(provider,stage,error){const status=providerStatusCode(error);console.error(`Calendar callback failed: provider=${provider} stage=${stage}${status?` status=${status}`:''}`);}
 function defaultDeps(){return{...data,googleProvider,appleProvider,encryptCredential,syncCalendars,reportCalendarError};}
