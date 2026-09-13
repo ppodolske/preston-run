@@ -1,6 +1,6 @@
 const { html, redirect, json, text } = require('../http/respond');
 const { renderLoginPage } = require('../pages/login');
-const { renderHomePage } = require('../pages/home');
+const { renderHomePage } = require('../pages/home-page');
 const { getAuthorizedOwner } = require('../auth/guard');
 const { listPeople } = require('../data/people');
 const { listLifeItems } = require('../data/life-admin');
