@@ -2,6 +2,8 @@ const { html, json, text } = require('../http/respond');
 const { renderLoginPage } = require('../pages/login');
 const { renderHomePage } = require('../pages/home');
 const { getAuthorizedOwner } = require('../auth/guard');
+const { listPeople } = require('../data/people');
+const { getUpcomingBirthdays, todayInTimeZone } = require('../domain/birthdays');
 const { APPS, VERSION } = require('../branding');
 
 async function probe(url) {
@@ -39,7 +41,15 @@ async function handleSiteRoute(req, res, context) {
   if (req.method === 'GET' && url.pathname === '/') {
     const auth = await getAuthorizedOwner(supabase, config);
     if (auth.user) {
-      html(res, 200, renderHomePage({ user:auth.user }), { 'cache-control':'private, no-store' });
+      let upcomingBirthdays = [];
+      let birthdayDataUnavailable = false;
+      try {
+        const people = await listPeople(supabase);
+        upcomingBirthdays = getUpcomingBirthdays(people, todayInTimeZone('Australia/Sydney'), 90);
+      } catch {
+        birthdayDataUnavailable = true;
+      }
+      html(res, 200, renderHomePage({ user:auth.user, upcomingBirthdays, birthdayDataUnavailable }), { 'cache-control':'private, no-store' });
       return true;
     }
     if (auth.reason === 'not_owner') {
