@@ -13,6 +13,12 @@ function findPdfAttachments(message){
   }));
 }
 
+function decodeBase64Url(data){
+  const text=String(data||'').replace(/-/g,'+').replace(/_/g,'/');
+  if(!text)return Buffer.alloc(0);
+  return Buffer.from(text.padEnd(Math.ceil(text.length/4)*4,'='),'base64');
+}
+
 async function extractNativePdfText(buffer,{pdfParse}={}){
   if(!buffer||buffer.length===0)return {status:'skipped',text:'',reason:'empty_pdf'};
   if(!pdfParse)return {status:'skipped',text:'',reason:'pdf_parser_not_configured'};
@@ -28,4 +34,4 @@ async function extractNativePdfText(buffer,{pdfParse}={}){
   }
 }
 
-module.exports={findPdfAttachments,extractNativePdfText,flattenParts};
+module.exports={findPdfAttachments,extractNativePdfText,flattenParts,decodeBase64Url};
