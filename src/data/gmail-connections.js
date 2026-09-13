@@ -45,4 +45,11 @@ async function updateGmailConnectionStatus(supabase,userId,connectionId,statusPa
   return data;
 }
 
-module.exports={getGmailConnection,upsertGmailConnection,markGmailDisconnected,updateGmailConnectionStatus};
+async function updateGmailAccessToken(supabase,userId,connectionId,accessTokenCiphertext){
+  const patch={access_token_ciphertext:accessTokenCiphertext,updated_at:nowIso()};
+  const {data,error}=await supabase.from('gmail_connections').update(patch).eq('user_id',userId).eq('id',connectionId).select('*').single();
+  throwIfError(error);
+  return data;
+}
+
+module.exports={getGmailConnection,upsertGmailConnection,markGmailDisconnected,updateGmailConnectionStatus,updateGmailAccessToken};
