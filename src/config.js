@@ -15,6 +15,7 @@ function loadConfig(env = process.env) {
     supabaseUrl: required(env, 'SUPABASE_URL'),
     supabasePublishableKey: required(env, 'SUPABASE_PUBLISHABLE_KEY'),
     ownerGoogleEmail: required(env, 'OWNER_GOOGLE_EMAIL').trim().toLowerCase(),
+    vapidPublicKey: required(env, 'VAPID_PUBLIC_KEY'),
     isProduction: (env.NODE_ENV || 'development') === 'production'
   };
 }
