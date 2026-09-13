@@ -5,7 +5,10 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node test.js"
+    "test": "node test.js",
+    "job:reminders:morning": "node src/jobs/reminders.js morning",
+    "job:reminders:noon": "node src/jobs/reminders.js noon",
+    "job:reminders:evening": "node src/jobs/reminders.js evening"
   },
   "dependencies": {
     "@supabase/ssr": "0.10.3",
