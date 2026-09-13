@@ -88,9 +88,31 @@ function dashboardSortValue(event,window){
   if(event.allDay)return new Date(event.day==='today'?window.startOfToday:window.startOfTomorrow).getTime();
   return new Date(event.startsAt).getTime();
 }
-function buildDashboardCalendar({events=[],sources=[],now=new Date()}={}){
+function normalizedWorkoutName(value){return String(value||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');}
+function normalizedWorkoutType(value){
+  const token=String(value||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+  if(!token)return null;
+  if(/\b(run|running|jog|jogging)\b/.test(token))return'running';
+  if(/\b(lift|lifting|strength|weights?|weight training|resistance)\b/.test(token))return'strength';
+  if(/\b(ride|riding|cycling|cycle|bike|biking)\b/.test(token))return'cycling';
+  if(/\b(swim|swimming)\b/.test(token))return'swimming';
+  if(/\b(walk|walking|hike|hiking)\b/.test(token))return'walking';
+  if(/\b(mobility|stretch|stretching|yoga)\b/.test(token))return'mobility';
+  return token;
+}
+function plannedWorkoutCompletion(plan,actualActivities=[]){
+  const planName=normalizedWorkoutName(plan&&plan.name),planType=normalizedWorkoutType(plan&&plan.sport);
+  if(!plan||!validDateKey(plan.date)||!planName||!planType)return{completed:false,completionKnown:false};
+  const matches=actualActivities.filter(activity=>activity&&activity.date===plan.date&&normalizedWorkoutName(activity.name)===planName&&normalizedWorkoutType(activity.type||activity.sport)===planType);
+  return matches.length===1?{completed:true,completionKnown:true}:{completed:false,completionKnown:false};
+}
+function dashboardPlannedWorkout(plan,day,actualActivities){
+  const completion=plannedWorkoutCompletion(plan,actualActivities);
+  return{id:plan.id??`${plan.date}:${plan.name||'workout'}`,title:String(plan.name||'Planned workout'),date:plan.date,day,sport:plan.sport||null,durationMinutes:Number.isFinite(Number(plan.durationMinutes))?Number(plan.durationMinutes):null,distanceKm:Number.isFinite(Number(plan.distanceKm))?Number(plan.distanceKm):null,description:plan.description||null,sourceName:'Planned Workout',sourceType:'planned_workout',...completion};
+}
+function buildDashboardCalendar({events=[],sources=[],plannedWorkouts=[],actualActivities=[],now=new Date()}={}){
   const window=getDashboardCalendarWindow(now);
-  const groups={personal:[],holidays:[],reminders:[]};
+  const groups={personal:[],holidays:[],reminders:[],plannedWorkouts:[]};
   const sourceGroups=new Map();
   for(const source of sources){if(source.selected===false)continue;const group=dashboardSourceGroup(source);if(group)sourceGroups.set(String(source.id),group);}
   for(const event of events){
@@ -98,7 +120,13 @@ function buildDashboardCalendar({events=[],sources=[],now=new Date()}={}){
     if(!group||!isDashboardCalendarEventEligible(event,window))continue;
     groups[group].push({id:event.id,title:String(event.title||''),allDay:Boolean(event.all_day),startsAt:event.starts_at||null,endsAt:event.ends_at||null,startDate:event.start_date||null,endDate:event.end_date||null,location:event.location||null,externalUrl:event.external_url||null,day:dashboardDay(event,window)});
   }
-  for(const group of Object.values(groups))group.sort((a,b)=>dashboardSortValue(a,window)-dashboardSortValue(b,window)||String(a.title).localeCompare(String(b.title)));
+  for(const plan of plannedWorkouts){
+    if(!plan||!validDateKey(plan.date))continue;
+    if(plan.date===window.today)groups.plannedWorkouts.push(dashboardPlannedWorkout(plan,'today',actualActivities));
+    else if(plan.date===window.tomorrow)groups.plannedWorkouts.push(dashboardPlannedWorkout(plan,'tomorrow',actualActivities));
+  }
+  for(const group of [groups.personal,groups.holidays,groups.reminders])group.sort((a,b)=>dashboardSortValue(a,window)-dashboardSortValue(b,window)||String(a.title).localeCompare(String(b.title)));
+  groups.plannedWorkouts.sort((a,b)=>(a.day==='today'?0:1)-(b.day==='today'?0:1)||String(a.title).localeCompare(String(b.title)));
   return groups;
 }
 
@@ -130,7 +158,10 @@ function getCalendarMonthWindow(monthKey,now=new Date()){
 function monthDisplayItem(event,source){
   return{id:event.id,title:String(event.title||''),allDay:Boolean(event.all_day),startsAt:event.starts_at||null,endsAt:event.ends_at||null,startDate:event.start_date||null,endDate:event.end_date||null,location:event.location||null,externalUrl:event.external_url||null,sourceName:String(source.display_name||'Calendar'),sourceColor:source.color||null};
 }
-function buildCalendarMonth({events=[],sources=[],monthKey,now=new Date()}={}){
+function monthPlannedWorkout(plan){
+  return{id:plan.id??`${plan.date}:${plan.name||'workout'}`,title:String(plan.name||'Planned workout'),allDay:true,startsAt:null,endsAt:null,startDate:plan.date,endDate:shiftDateKey(plan.date,{days:1}),location:null,externalUrl:null,sourceName:'Planned Workout',sourceColor:null,sourceType:'planned_workout',sport:plan.sport||null,durationMinutes:Number.isFinite(Number(plan.durationMinutes))?Number(plan.durationMinutes):null,distanceKm:Number.isFinite(Number(plan.distanceKm))?Number(plan.distanceKm):null,description:plan.description||null};
+}
+function buildCalendarMonth({events=[],sources=[],plannedWorkouts=[],monthKey,now=new Date()}={}){
   const window=getCalendarMonthWindow(monthKey,now);
   const days={};
   for(let key=window.firstDate;key<=window.lastDate;key=shiftDateKey(key,{days:1}))days[key]=[];
@@ -152,6 +183,10 @@ function buildCalendarMonth({events=[],sources=[],monthKey,now=new Date()}={}){
     const startKey=dateKey(localParts(new Date(event.starts_at),SYDNEY_TZ));
     const key=startKey<window.firstDate?window.firstDate:startKey;
     if(days[key])days[key].push(item);
+  }
+  for(const plan of plannedWorkouts){
+    if(!plan||!validDateKey(plan.date)||plan.date<window.firstDate||plan.date>window.lastDate)continue;
+    days[plan.date].push(monthPlannedWorkout(plan));
   }
   for(const list of Object.values(days))list.sort((a,b)=>{if(a.allDay!==b.allDay)return a.allDay?-1:1;const at=a.startsAt?new Date(a.startsAt).getTime():0,bt=b.startsAt?new Date(b.startsAt).getTime():0;return at-bt||String(a.title).localeCompare(String(b.title));});
   return{...window,days};
