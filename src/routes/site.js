@@ -6,10 +6,14 @@ const { listPeople } = require('../data/people');
 const { listLifeItems } = require('../data/life-admin');
 const { listTasks } = require('../data/tasks');
 const { listTrips } = require('../data/trips');
+const { listCalendarDashboardData } = require('../data/calendars');
 const { getUpcomingBirthdays, todayInTimeZone } = require('../domain/birthdays');
-const { getComingUpLifeItems, getNeedsAttention } = require('../domain/life-admin');
+const { getComingUpLifeItems, getAttentionBuckets, excludeAttentionFromComingUp } = require('../domain/life-admin');
+const { buildDashboardCalendar } = require('../domain/calendars');
 const { getUpcomingTrips } = require('../domain/trips');
 const { APPS, VERSION } = require('../branding');
+
+function depsFor(context={}){return{listPeople,listLifeItems,listTasks,listTrips,listCalendarDashboardData,getUpcomingBirthdays,getComingUpLifeItems,getAttentionBuckets,excludeAttentionFromComingUp,buildDashboardCalendar,getUpcomingTrips,...(context.siteDeps||{})};}
 
 async function probe(url) {
   const started = Date.now();
@@ -26,6 +30,7 @@ async function probe(url) {
 
 async function handleSiteRoute(req, res, context) {
   const { supabase, config } = context;
+  const deps=depsFor(context);
   let url;
   try { url = new URL(req.url, config.siteUrl); } catch { text(res, 400, 'Bad request'); return true; }
 
@@ -46,34 +51,30 @@ async function handleSiteRoute(req, res, context) {
   if (req.method === 'GET' && url.pathname === '/') {
     const auth = await getAuthorizedOwner(supabase, config);
     if (auth.user) {
-      let upcomingBirthdays = [];
-      let birthdayDataUnavailable = false;
-      let upcomingLifeItems = [];
-      let needsAttention = [];
-      let lifeAdminDataUnavailable = false;
-      let upcomingTrips = [];
-      let tripDataUnavailable = false;
+      let upcomingBirthdays = [], birthdayDataUnavailable = false;
+      let upcomingLifeItems = [], overdueItems = [], todayItems = [], lifeAdminDataUnavailable = false;
+      let upcomingTrips = [], tripDataUnavailable = false;
+      let calendar = {personal:[],holidays:[],reminders:[]}, calendarDataUnavailable = false;
       try {
-        const people = await listPeople(supabase);
-        upcomingBirthdays = getUpcomingBirthdays(people, todayInTimeZone('Australia/Sydney'), 90);
-      } catch {
-        birthdayDataUnavailable = true;
-      }
+        const people = await deps.listPeople(supabase);
+        upcomingBirthdays = deps.getUpcomingBirthdays(people, todayInTimeZone('Australia/Sydney'), 90);
+      } catch { birthdayDataUnavailable = true; }
       try {
-        const [lifeItems, tasks] = await Promise.all([listLifeItems(supabase), listTasks(supabase)]);
+        const [lifeItems, tasks] = await Promise.all([deps.listLifeItems(supabase), deps.listTasks(supabase)]);
         const now = new Date();
-        upcomingLifeItems = getComingUpLifeItems(lifeItems, now, 90);
-        needsAttention = getNeedsAttention({ lifeItems, tasks, now });
-      } catch {
-        lifeAdminDataUnavailable = true;
-      }
+        const buckets=deps.getAttentionBuckets({lifeItems,tasks,now});
+        overdueItems=buckets.overdue;todayItems=buckets.today;
+        upcomingLifeItems = deps.excludeAttentionFromComingUp(deps.getComingUpLifeItems(lifeItems, now, 90),buckets);
+      } catch { lifeAdminDataUnavailable = true; }
       try {
-        const trips = await listTrips(supabase, auth.user);
-        upcomingTrips = getUpcomingTrips(trips, new Date(), 180);
-      } catch {
-        tripDataUnavailable = true;
-      }
-      html(res, 200, renderHomePage({ user:auth.user, upcomingBirthdays, birthdayDataUnavailable, upcomingLifeItems, needsAttention, lifeAdminDataUnavailable, upcomingTrips, tripDataUnavailable }), { 'cache-control':'private, no-store' });
+        const data=await deps.listCalendarDashboardData(supabase,auth.user.id);
+        calendar=deps.buildDashboardCalendar({...data,now:new Date()});
+      } catch { calendarDataUnavailable = true; }
+      try {
+        const trips = await deps.listTrips(supabase, auth.user);
+        upcomingTrips = deps.getUpcomingTrips(trips, new Date(), 180);
+      } catch { tripDataUnavailable = true; }
+      html(res, 200, renderHomePage({ user:auth.user, upcomingBirthdays, birthdayDataUnavailable, upcomingLifeItems, overdueItems, todayItems, lifeAdminDataUnavailable, calendar, calendarDataUnavailable, upcomingTrips, tripDataUnavailable }), { 'cache-control':'private, no-store' });
       return true;
     }
     if (auth.reason === 'not_owner') {
