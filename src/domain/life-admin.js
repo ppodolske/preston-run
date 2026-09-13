@@ -30,6 +30,38 @@ function keyMs(key) { const [y,m,d]=key.split('-').map(Number); return Date.UTC(
 function isOverdue(record, now = new Date()) { if (!record || !activeStatus(record.status) || !record.due_at) return false; return storedDateKey(record.due_at) < dateKeyInTimeZone(now); }
 function sortAttention(a,b){const rank=(PRIORITY_RANK[a.record.priority||'normal']??2)-(PRIORITY_RANK[b.record.priority||'normal']??2);if(rank)return rank;if(a.overdue!==b.overdue)return a.overdue?-1:1;const ad=a.record.due_at?keyMs(storedDateKey(a.record.due_at)):Infinity;const bd=b.record.due_at?keyMs(storedDateKey(b.record.due_at)):Infinity;if(ad!==bd)return ad-bd;return String(a.record.title).localeCompare(String(b.record.title));}
 function getNeedsAttention({ lifeItems = [], tasks = [], now = new Date() } = {}) { const life=lifeItems.filter(item=>activeStatus(item.status)&&(item.status==='needs_action'||isOverdue(item,now)||item.priority==='urgent')).map(record=>({type:'life_item',record,overdue:isOverdue(record,now)})); const taskRows=tasks.filter(task=>activeStatus(task.status)&&(isOverdue(task,now)||task.priority==='urgent')).map(record=>({type:'task',record,overdue:isOverdue(record,now)})); return life.concat(taskRows).sort(sortAttention); }
+
+function sortAttentionBucket(a,b){
+  const rank=(PRIORITY_RANK[a.record.priority||'normal']??2)-(PRIORITY_RANK[b.record.priority||'normal']??2);
+  if(rank)return rank;
+  const ad=a.record.due_at?new Date(a.record.due_at).getTime():Infinity;
+  const bd=b.record.due_at?new Date(b.record.due_at).getTime():Infinity;
+  if(ad!==bd)return ad-bd;
+  const title=String(a.record.title||'').localeCompare(String(b.record.title||''));
+  if(title)return title;
+  return `${a.type}:${a.record.id||''}`.localeCompare(`${b.type}:${b.record.id||''}`);
+}
+function getAttentionBuckets({lifeItems=[],tasks=[],now=new Date()}={}){
+  const todayKey=dateKeyInTimeZone(now);
+  const overdue=[];
+  const today=[];
+  for(const [type,records] of [['life_item',lifeItems],['task',tasks]]){
+    for(const record of records){
+      if(!record||!activeStatus(record.status)||!record.due_at)continue;
+      const dueKey=storedDateKey(record.due_at);
+      if(dueKey<todayKey)overdue.push({type,record,overdue:true});
+      else if(dueKey===todayKey)today.push({type,record,overdue:false});
+    }
+  }
+  overdue.sort(sortAttentionBucket);
+  today.sort(sortAttentionBucket);
+  return{overdue,today};
+}
+
 function lifeItemDate(item){return item.starts_at||item.due_at||null;}
 function getComingUpLifeItems(lifeItems=[],now=new Date(),days=90){const nowKey=dateKeyInTimeZone(now),startMs=keyMs(nowKey),endMs=startMs+days*86400000;return lifeItems.filter(item=>activeStatus(item.status)).map(item=>{const raw=lifeItemDate(item);if(!raw)return null;const key=storedDateKey(raw),ms=keyMs(key);return {item,date:new Date(raw),daysAway:Math.round((ms-startMs)/86400000),dayMs:ms};}).filter(Boolean).filter(row=>row.dayMs>=startMs&&row.dayMs<=endMs).sort((a,b)=>a.dayMs-b.dayMs||String(a.item.title).localeCompare(String(b.item.title)));}
-module.exports={LIFE_CATEGORIES,LIFE_STATUSES,TASK_STATUSES,PRIORITIES,parseLocalDateInput,validateLifeItemInput,validateTaskInput,isOverdue,getNeedsAttention,getComingUpLifeItems,dateKeyInTimeZone};
+function excludeAttentionFromComingUp(rows=[],buckets={}){
+  const attentionLifeIds=new Set([...(buckets.overdue||[]),...(buckets.today||[])].filter(row=>row.type==='life_item'&&row.record&&row.record.id!=null).map(row=>String(row.record.id)));
+  return rows.filter(row=>!row||!row.item||row.item.id==null||!attentionLifeIds.has(String(row.item.id)));
+}
+module.exports={LIFE_CATEGORIES,LIFE_STATUSES,TASK_STATUSES,PRIORITIES,parseLocalDateInput,validateLifeItemInput,validateTaskInput,isOverdue,getNeedsAttention,getAttentionBuckets,getComingUpLifeItems,excludeAttentionFromComingUp,dateKeyInTimeZone};
