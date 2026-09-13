@@ -3,13 +3,18 @@ function nullableText(value) {
   return text || null;
 }
 
+function nullableNumber(value) {
+  if (value === '' || value == null) return null;
+  return Number(value);
+}
+
 function personPayload(input) {
   return {
     name: String(input.name ?? '').trim(),
     relationship: nullableText(input.relationship),
-    birthday_month: input.birthday_month == null ? null : Number(input.birthday_month),
-    birthday_day: input.birthday_day == null ? null : Number(input.birthday_day),
-    birth_year: input.birth_year == null ? null : Number(input.birth_year),
+    birthday_month: nullableNumber(input.birthday_month),
+    birthday_day: nullableNumber(input.birthday_day),
+    birth_year: nullableNumber(input.birth_year),
     notes: nullableText(input.notes),
     active: input.active !== false
   };
@@ -49,4 +54,4 @@ async function deletePerson(supabase, id) {
   return Boolean(result.data);
 }
 
-module.exports = { listPeople, getPerson, createPerson, updatePerson, deletePerson, personPayload, nullableText };
+module.exports = { listPeople, getPerson, createPerson, updatePerson, deletePerson, personPayload, nullableText, nullableNumber };
