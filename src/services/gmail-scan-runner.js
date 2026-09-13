@@ -99,6 +99,7 @@ async function runGmailScan({supabase,userId,connection,provider,config,existing
         const match=rankTripMatch(persistedFacts,existingTrips);
         const decisions=await applyTripDecisions({actions:resolvedActions,facts:persistedFacts,match,source});
         counters.decisionCount+=decisions.length;
+        if(persistence.updateSourceStatus)await persistence.updateSourceStatus(source.id,{processing_status:'processed',processing_reason:null});
         counters.processedCount+=1;
       }
       if(persistence.updateScanProgress)await persistence.updateScanProgress(scan.id,counters);
