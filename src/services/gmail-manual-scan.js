@@ -6,6 +6,7 @@ const {listTrips}=require('../data/trips');
 const {createGmailProvider}=require('./gmail-provider');
 const {runGmailScan}=require('./gmail-scan-runner');
 const {buildGmailTripActions}=require('./gmail-trip-actions');
+const {buildGmailLifeAdminActions}=require('./gmail-life-admin-actions');
 
 function normalizeDecryptedAccessToken(value){
   if(typeof value==='string')return value;
@@ -52,9 +53,19 @@ async function startManualGmailScan(supabase,userId,config,options={}){
   const tripLister=options.listTrips||listTrips;
   const existingTrips=await tripLister(supabase,{id:userId});
   const persistence=options.persistence||createGmailPersistenceAdapters({supabase,userId,connection});
-  const actions=options.actions||buildGmailTripActions({supabase,userId,tripData:options.tripData||require('../data/trips'),gmailData:{recordGmailActivity},reviewData:options.reviewData});
+  const lifeAdminActions=options.lifeAdminActions||buildGmailLifeAdminActions({
+    supabase,
+    userId,
+    lifeAdminData:options.lifeAdminData,
+    gmailData:options.gmailData||{recordGmailActivity},
+    reviewData:options.reviewLinkData
+  });
+  const reviewData=options.reviewData||{
+    createGmailReviewItem:async(_db,_user,decision)=>lifeAdminActions.createReviewItem(decision.source||{id:decision.sourceRecordId},{reason:decision.reason||decision.reviewType||'trip_review'})
+  };
+  const actions=options.actions||buildGmailTripActions({supabase,userId,tripData:options.tripData||require('../data/trips'),gmailData:options.gmailData||{recordGmailActivity},reviewData});
   const runner=options.runGmailScan||runGmailScan;
-  return runner({supabase,userId,connection,provider,config:config.gmail,existingTrips,persistence,actions,pdfParse:options.pdfParse});
+  return runner({supabase,userId,connection,provider,config:config.gmail,existingTrips,persistence,actions,lifeAdminActions,pdfParse:options.pdfParse});
 }
 
 function createGmailManualScanDeps(config,options={}){
