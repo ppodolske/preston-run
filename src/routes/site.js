@@ -1,4 +1,4 @@
-const { html, json, text } = require('../http/respond');
+const { html, redirect, json, text } = require('../http/respond');
 const { renderLoginPage } = require('../pages/login');
 const { renderHomePage } = require('../pages/home');
 const { getAuthorizedOwner } = require('../auth/guard');
@@ -11,9 +11,10 @@ const { getUpcomingBirthdays, todayInTimeZone } = require('../domain/birthdays')
 const { getComingUpLifeItems, getAttentionBuckets, excludeAttentionFromComingUp } = require('../domain/life-admin');
 const { buildDashboardCalendar } = require('../domain/calendars');
 const { getUpcomingTrips } = require('../domain/trips');
+const { refreshFitnessContext } = require('../services/fitness-context');
 const { APPS, VERSION } = require('../branding');
 
-function depsFor(context={}){return{listPeople,listLifeItems,listTasks,listTrips,listCalendarDashboardData,getUpcomingBirthdays,getComingUpLifeItems,getAttentionBuckets,excludeAttentionFromComingUp,buildDashboardCalendar,getUpcomingTrips,...(context.siteDeps||{})};}
+function depsFor(context={}){return{listPeople,listLifeItems,listTasks,listTrips,listCalendarDashboardData,getUpcomingBirthdays,getComingUpLifeItems,getAttentionBuckets,excludeAttentionFromComingUp,buildDashboardCalendar,getUpcomingTrips,refreshFitnessContext,...(context.siteDeps||{})};}
 
 async function probe(url) {
   const started = Date.now();
@@ -45,6 +46,18 @@ async function handleSiteRoute(req, res, context) {
     const results = await Promise.all(APPS.map(app => probe(app.url)));
     const statuses = Object.fromEntries(APPS.map((app, i) => [app.key, results[i]]));
     json(res, 200, { checkedAt:new Date().toISOString(), ...statuses }, { 'cache-control':'private, no-store' });
+    return true;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/fitness-context/refresh') {
+    const auth=await getAuthorizedOwner(supabase,config);
+    if(!auth.user){redirect(res,'/');return true;}
+    try{
+      const result=await deps.refreshFitnessContext({supabase,userId:auth.user.id,now:new Date(),forceDigest:true});
+      redirect(res,result&&result.ok?'/?fitness_refresh=ok':'/?fitness_refresh=stale');
+    }catch{
+      redirect(res,'/?fitness_refresh=stale');
+    }
     return true;
   }
 
