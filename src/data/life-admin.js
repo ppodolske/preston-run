@@ -22,6 +22,7 @@ function gmailSourceMetadata(input={}){
     source:'gmail',
     source_record_id:optionalText(input.source_record_id),
     gmail_message_id:optionalText(input.gmail_message_id),
+    gmail_thread_id:optionalText(input.gmail_thread_id),
     source_link:optionalText(input.source_link),
     sender:optionalText(input.sender),
     classification_reason:optionalText(input.classification_reason)
@@ -47,11 +48,36 @@ async function createLifeItem(supabase,user,input) {
   return result.data;
 }
 
+async function findGmailLifeItem(supabase,user,sourceMetadata={}){
+  if (!user || !user.id) throw new Error('Authenticated user is required');
+  const metadata=gmailSourceMetadata(sourceMetadata);
+  const identity=metadata.gmail_thread_id?['gmail_thread_id',metadata.gmail_thread_id]:metadata.source_record_id?['source_record_id',metadata.source_record_id]:null;
+  if(!identity)return null;
+  let query=supabase.from('life_items').select('*').eq('user_id',user.id).eq('source_metadata->>source','gmail').eq(`source_metadata->>${identity[0]}`,identity[1]);
+  if(typeof query.limit==='function')query=query.limit(1);
+  const result=await query.maybeSingle();
+  if(result.error)throw result.error;
+  return result.data||null;
+}
+
 async function createGmailLifeItem(supabase,user,input,sourceMetadata={}){
   if (!user || !user.id) throw new Error('Authenticated user is required');
   const result=await supabase.from('life_items').insert({...payload(input),user_id:user.id,source_metadata:gmailSourceMetadata(sourceMetadata)}).select('*').single();
   if(result.error)throw result.error;
   return result.data;
+}
+
+async function ensureGmailLifeItem(supabase,user,input,sourceMetadata={}){
+  const existing=await findGmailLifeItem(supabase,user,sourceMetadata);
+  if(existing)return {item:existing,created:false};
+  try{
+    return {item:await createGmailLifeItem(supabase,user,input,sourceMetadata),created:true};
+  }catch(error){
+    if(String(error&&error.code||'')!=='23505')throw error;
+    const raced=await findGmailLifeItem(supabase,user,sourceMetadata);
+    if(!raced)throw error;
+    return {item:raced,created:false};
+  }
 }
 
 async function updateLifeItem(supabase,user,id,input) {
@@ -68,4 +94,4 @@ async function deleteLifeItem(supabase,user,id) {
   return Boolean(result.data);
 }
 
-module.exports={listLifeItems,getLifeItem,createLifeItem,createGmailLifeItem,updateLifeItem,deleteLifeItem,payload,gmailSourceMetadata};
+module.exports={listLifeItems,getLifeItem,createLifeItem,createGmailLifeItem,findGmailLifeItem,ensureGmailLifeItem,updateLifeItem,deleteLifeItem,payload,gmailSourceMetadata};
