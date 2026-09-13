@@ -2,7 +2,7 @@ const assert=require('node:assert/strict');
 const {
   getCalendarConnection,getCalendarConnectionWithCredential,listCalendarConnections,upsertCalendarConnection,updateCalendarSyncState,deleteCalendarConnection,
   listCalendarSources,replaceDiscoveredCalendarSources,setCalendarSourceSelected,listSelectedCalendarSources,
-  upsertCalendarEvents,listCalendarEventsForDigest,listCalendarDashboardData,deleteEventsForSource,deleteUnseenEventsForSource,deleteEventsOutsideWindow
+  upsertCalendarEvents,listCalendarEventsForDigest,listCalendarDashboardData,listCalendarViewData,deleteEventsForSource,deleteUnseenEventsForSource,deleteEventsOutsideWindow
 }=require('../src/data/calendars');
 
 function builder({rows=[],singleRow=null}={}){
@@ -52,6 +52,12 @@ function ownerFiltered(b){return has(b,'eq','user_id','u1');}
   const dashboardData=await listCalendarDashboardData(s,'u1');
   assert.deepEqual(dashboardData,{events:[{id:'e1'}],sources:[{id:'s1',selected:true}]});
   assert.equal(ownerFiltered(dashboardEvents),true);assert.equal(ownerFiltered(dashboardSources),true);assert.ok(has(dashboardSources,'eq','selected',true));
+
+  const viewEvents=builder({rows:[{id:'e2'}]}),viewSources=builder({rows:[{id:'s2',selected:true}]});
+  s={from:t=>t==='calendar_events'?viewEvents:viewSources};
+  const viewData=await listCalendarViewData(s,'u1');
+  assert.deepEqual(viewData,{events:[{id:'e2'}],sources:[{id:'s2',selected:true}]});
+  assert.equal(ownerFiltered(viewEvents),true);assert.equal(ownerFiltered(viewSources),true);assert.ok(has(viewSources,'eq','selected',true));
 
   b=builder({rows:[]});s={from:()=>b};await deleteEventsForSource(s,'u1','s1');assert.equal(ownerFiltered(b),true);assert.ok(has(b,'eq','calendar_source_id','s1'));
   b=builder({rows:[]});s={from:()=>b};await deleteUnseenEventsForSource(s,'u1','s1','2026-09-13T05:00:00Z');assert.equal(ownerFiltered(b),true);assert.ok(has(b,'eq','calendar_source_id','s1'));assert.ok(has(b,'lt','sync_seen_at','2026-09-13T05:00:00Z'));
