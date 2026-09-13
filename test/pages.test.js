@@ -22,10 +22,10 @@ const home = renderHomePage({
   morningDigest:{
     status:'good',headline:'Recovery signals look broadly normal.',generated_at:'2026-09-13T21:15:00Z',garmin_sync_at:'2026-09-13T20:55:00Z',
     cards:[
-      {id:'recovery',title:'Recovery',value:'Good',detail:'Sleep 7h 42m'},
-      {id:'training',title:'Today’s training',value:'Workout B',detail:'Strength'},
-      {id:'weight',title:'Weight trend',value:'Down',detail:'28-day trend'},
-      {id:'context',title:'Context',value:'Base phase',detail:'3 sessions this week'}
+      {id:'recovery',title:'Recovery',items:[{label:'Sleep',value:'7h 42m'},{label:'Resting HR',value:'50 bpm'}]},
+      {id:'training',title:'Today’s training',items:[{label:'Today',value:'Workout B'},{label:'Last 7 days',value:'3 sessions'}]},
+      {id:'weight',title:'Weight trend',items:[{label:'28-day direction',value:'Down'}]},
+      {id:'context',title:'Context',items:[{label:'Active phase',value:'Base phase'}]}
     ],
     bullets:['Today’s plan is Workout B. Recovery does not currently suggest a need to change it.']
   },
