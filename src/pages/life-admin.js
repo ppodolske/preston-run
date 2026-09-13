@@ -47,7 +47,8 @@ function renderLifeItemPage({item,linkedTasks=[],person=null}={}){
   if(item.starts_at)rows.push(`<div class="row"><span>Starts</span><strong>${esc(fmtDate(item.starts_at))}</strong></div>`);
   if(person)rows.push(`<div class="row"><span>Person</span><strong>${esc(person.name)}</strong></div>`);
   if(item.recurrence_rule)rows.push(`<div class="row"><span>Recurrence</span><strong>${esc(item.recurrence_rule)}</strong></div>`);
-  const body=`<h1>${esc(item.title)}</h1><div class="sub">${esc(label(item.category))} · ${esc(label(item.status))}</div><div class="panel">${rows.join('')}${item.notes?`<div class="notes">${esc(item.notes)}</div>`:''}</div><div class="actions life-detail-actions">${buttonLink({href:`/life-admin/${encodeURIComponent(item.id)}/edit`,text:'Edit item',primary:true})}${buttonLink({href:`/tasks/new?life_item_id=${encodeURIComponent(item.id)}`,text:'Add task'})}${buttonLink({href:'/life-admin',text:'Back'})}</div><div class="section">Tasks</div><div class="panel">${tasks}</div>`;
+  const sourceLink=item.source_metadata&&item.source_metadata.source==='gmail'&&item.source_metadata.source_link?buttonLink({href:item.source_metadata.source_link,text:'Open source email'}):'';
+  const body=`<h1>${esc(item.title)}</h1><div class="sub">${esc(label(item.category))} · ${esc(label(item.status))}</div><div class="panel">${rows.join('')}${item.notes?`<div class="notes">${esc(item.notes)}</div>`:''}</div><div class="actions life-detail-actions">${buttonLink({href:`/life-admin/${encodeURIComponent(item.id)}/edit`,text:'Edit item',primary:true})}${buttonLink({href:`/tasks/new?life_item_id=${encodeURIComponent(item.id)}`,text:'Add task'})}${sourceLink}${buttonLink({href:'/life-admin',text:'Back'})}</div><div class="section">Tasks</div><div class="panel">${tasks}</div>`;
   return renderShell({title:item.title,activeNav:'Life Admin',body});
 }
 
