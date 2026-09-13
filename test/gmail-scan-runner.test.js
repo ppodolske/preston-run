@@ -84,5 +84,52 @@ async function runWithActions(actions,existingTrips=[{id:'trip1',bookingReferenc
   },[]);
   assert.equal(created.length,1);
   assert.equal(created[0].type,'create_trip');
+
+  const pages=[];
+  const pageProcessed=[];
+  const paged=await runGmailScan({
+    supabase:{},
+    userId:'user1',
+    connection:{id:'conn1',gmail_account_email:'me@example.com',first_scan_completed_at:null},
+    provider:{
+      listMessages:async(_query,pageToken)=>{pages.push(pageToken||'first');return pageToken==='p2'?{messages:[{id:'m2'}]}:{messages:[{id:'m1'}],nextPageToken:'p2'};},
+      getMessage:async(id)=>({id,threadId:`t-${id}`,labelIds:['INBOX'],internalDate:String(Date.parse('2026-09-13T00:00:00Z')),snippet:'Booking reference ABC123 Flight QF401',payload:{headers:[{name:'Subject',value:'Flight QF401 booking ABC123'}]}})
+    },
+    config:{scannerVersion:'scanner1',parserVersion:'parser1',initialLookbackMonths:12},
+    existingTrips:[],
+    persistence:basePersistence(pageProcessed),
+    actions:{applyCreateTripFromGmail:async()=>{}}
+  });
+  assert.equal(paged.status,'succeeded');
+  assert.deepEqual(pages,['first','p2']);
+  assert.deepEqual(pageProcessed,['m1','m2']);
+
+  const duplicateProcessed=[];
+  const duplicate=await runGmailScan({
+    supabase:{},userId:'user1',connection:{id:'conn1',gmail_account_email:'me@example.com',first_scan_completed_at:null},provider:baseProvider(),
+    config:{scannerVersion:'scanner1',parserVersion:'parser1',initialLookbackMonths:12},existingTrips:[],
+    persistence:{...basePersistence(duplicateProcessed),findExistingSource:async()=>({id:'src-existing',processing_status:'processed'})},
+    actions:{applyCreateTripFromGmail:async()=>assert.fail('processed duplicate must not reapply')}
+  });
+  assert.equal(duplicate.status,'succeeded');
+  assert.deepEqual(duplicateProcessed,[]);
+
+  const attachmentCalls=[];
+  const pdfFacts=[];
+  const pdf=await runGmailScan({
+    supabase:{},userId:'user1',connection:{id:'conn1',gmail_account_email:'me@example.com',first_scan_completed_at:null},
+    provider:{
+      listMessages:async()=>({messages:[{id:'m1'}]}),
+      getMessage:async()=>({id:'m1',threadId:'t1',labelIds:['INBOX'],internalDate:String(Date.parse('2026-09-13T00:00:00Z')),snippet:'Flight booking',payload:{headers:[{name:'Subject',value:'Flight booking'}],parts:[{filename:'itinerary.pdf',mimeType:'application/pdf',body:{attachmentId:'att1'}}]}}),
+      getAttachment:async(messageId,attachmentId)=>{attachmentCalls.push([messageId,attachmentId]);return {data:Buffer.from('pdf bytes').toString('base64url')};}
+    },
+    config:{scannerVersion:'scanner1',parserVersion:'parser1',initialLookbackMonths:12,extractNativePdfText:async()=>({status:'processed',text:'Booking reference PDF123 Flight QF402',reason:null})},
+    existingTrips:[],
+    persistence:{...basePersistence([]),upsertAttachment:async(sourceId,attachment)=>({id:'att-row',sourceId,...attachment}),insertFacts:async(facts)=>{pdfFacts.push(...facts);return facts;}},
+    actions:{applyCreateTripFromGmail:async()=>{}}
+  });
+  assert.equal(pdf.status,'succeeded');
+  assert.deepEqual(attachmentCalls,[['m1','att1']]);
+  assert.equal(pdfFacts.some(f=>f.attachment_record_id==='att-row'),true);
   console.log('gmail scan runner tests passed');
 })();
