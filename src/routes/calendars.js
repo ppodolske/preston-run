@@ -5,6 +5,7 @@ const {getAuthorizedOwner}=require('../auth/guard');
 const {readForm,isSameOriginRequest}=require('../http/forms');
 const {html,redirect,text}=require('../http/respond');
 const data=require('../data/calendars');
+const fitnessData=require('../data/fitness-context');
 const googleProvider=require('../calendar/providers/google');
 const appleProvider=require('../calendar/providers/apple-caldav');
 const {encryptCredential,decodeCredentialKey}=require('../security/credential-crypto');
@@ -25,12 +26,25 @@ function normalizedSources(rows=[]){return rows.map(row=>({provider_calendar_id:
 function keyFor(config){return decodeCredentialKey(config.calendarCredentialKey);}
 function providerStatusCode(error){const match=String(error&&error.message||'').match(/\((\d{3})\)\s*$/);return match?Number(match[1]):null;}
 function reportCalendarError(provider,stage,error){const status=providerStatusCode(error);console.error(`Calendar callback failed: provider=${provider} stage=${stage}${status?` status=${status}`:''}`);}
-function defaultDeps(){return{...data,googleProvider,appleProvider,encryptCredential,syncCalendars,reportCalendarError};}
+function defaultDeps(){return{...data,...fitnessData,googleProvider,appleProvider,encryptCredential,syncCalendars,reportCalendarError};}
 function mergeDeps(context){return{...defaultDeps(),...(context.calendarDeps||{})};}
 function validOAuthState(expected,received){if(!expected||!received||expected.length<32)return false;const a=Buffer.from(expected),b=Buffer.from(received);return a.length===b.length&&crypto.timingSafeEqual(a,b);}
 
 async function renderSettings(res,supabase,user,deps,url){try{const connections=await deps.listCalendarConnections(supabase,user.id);const sources=await deps.listCalendarSources(supabase,user.id);let flash=null;if(url.searchParams.get('connected'))flash=`${url.searchParams.get('connected')==='apple'?'Apple':'Google'} Calendar connected.`;else if(url.searchParams.get('synced'))flash='Calendars synced.';else if(url.searchParams.get('saved'))flash='Calendar selection saved.';else if(url.searchParams.get('disconnected'))flash='Calendar disconnected.';privateHtml(res,renderCalendarsPage({connections,sources,flash}));}catch(_error){html(res,500,renderCalendarsPage({connections:[],sources:[],flash:'Calendar settings are temporarily unavailable.'}),{'cache-control':'private, no-store'});}}
-async function renderFullCalendar(res,supabase,user,deps,url){let window;try{window=getCalendarMonthWindow(url.searchParams.get('month')||undefined);}catch{window=getCalendarMonthWindow();}try{const data=await deps.listCalendarViewData(supabase,user.id);const month=buildCalendarMonth({...data,monthKey:window.monthKey});privateHtml(res,renderCalendarViewPage({month}));}catch(_error){const month={...window,days:Object.fromEntries(Array.from({length:Number(window.lastDate.slice(-2))},(_,i)=>{const d=String(i+1).padStart(2,'0');return[`${window.monthKey}-${d}`,[]];}))};privateHtml(res,renderCalendarViewPage({month,dataUnavailable:true}));}}
+async function renderFullCalendar(res,supabase,user,deps,url){
+  let window;try{window=getCalendarMonthWindow(url.searchParams.get('month')||undefined);}catch{window=getCalendarMonthWindow();}
+  let providerData={events:[],sources:[]},fitnessContext=null,providerUnavailable=false,fitnessUnavailable=false;
+  try{providerData=await deps.listCalendarViewData(supabase,user.id);}catch{providerUnavailable=true;}
+  try{fitnessContext=await deps.getFitnessContext(supabase,user.id);}catch{fitnessUnavailable=true;}
+  const payload=fitnessContext&&fitnessContext.payload&&typeof fitnessContext.payload==='object'?fitnessContext.payload:{};
+  try{
+    const month=buildCalendarMonth({...providerData,plannedWorkouts:Array.isArray(payload.plannedWorkouts)?payload.plannedWorkouts:[],monthKey:window.monthKey});
+    privateHtml(res,renderCalendarViewPage({month,dataUnavailable:providerUnavailable&&fitnessUnavailable}));
+  }catch(_error){
+    const month={...window,days:Object.fromEntries(Array.from({length:Number(window.lastDate.slice(-2))},(_,i)=>{const d=String(i+1).padStart(2,'0');return[`${window.monthKey}-${d}`,[]];}))};
+    privateHtml(res,renderCalendarViewPage({month,dataUnavailable:true}));
+  }
+}
 
 async function handleCalendarsRoute(req,res,context){
   const{supabase,config}=context;let url;try{url=new URL(req.url,config.siteUrl);}catch{return false;}if(!pathMatches(url.pathname))return false;
