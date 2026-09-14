@@ -146,7 +146,7 @@ function getUpcomingTrips(trips = [], today = new Date(), days = 180) {
   const todayKey = dateKeyInTimeZone(today);
   const startMs = dateKeyMs(todayKey);
   const endMs = startMs + Number(days) * 86400000;
-  return trips.filter(trip => !['completed','cancelled'].includes(trip.status)).filter(trip => {
+  return trips.filter(trip=>!trip.archived_at).filter(trip => !['completed','cancelled'].includes(trip.status)).filter(trip => {
     if (!trip.start_date) return false;
     const tripStart = dateKeyMs(trip.start_date);
     const tripEnd = trip.end_date ? dateKeyMs(trip.end_date) : tripStart;
