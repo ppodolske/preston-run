@@ -52,7 +52,7 @@ function bookingUrl(text){
   const value=String(text||'');
   const preferred=value.match(/(?:manage|modify)(?:\s+(?:your|my|the))?\s+(?:booking|reservation|rental|trip)[^\n]{0,120}?(https?:\/\/[^\s<>"']+)/i)||value.match(/view(?:\s+(?:your|my|the))\s+(?:booking|reservation|rental|trip)[^\n]{0,120}?(https?:\/\/[^\s<>"']+)/i);
   const urls=[...value.matchAll(/https?:\/\/[^\s<>"']+/gi)].map(m=>m[0].replace(/[\]\),.;]+$/,''));
-  const valid=url=>url&&!/\b(?:www\.)?w3\.org\/2001\/XMLSchema|schemas\.microsoft\.com/i.test(url)&&!\.(?:png|jpe?g|gif|svg|webp)(?:\?|$)/i.test(url);
+  const valid=url=>url&&!/\b(?:www\.)?w3\.org\/2001\/XMLSchema|schemas\.microsoft\.com/i.test(url)&&!/\.(?:png|jpe?g|gif|svg|webp)(?:\?|$)/i.test(url);
   if(preferred&&valid(preferred[1]))return preferred[1].replace(/[\]\),.;]+$/,'');
   return urls.find(valid)||null;
 }
