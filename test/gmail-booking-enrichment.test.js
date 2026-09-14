@@ -62,6 +62,7 @@ Starter fares include a carry-on baggage allowance of one bag and one small pers
 
   const applied=await runGmailBookingEnrichment({...base,mode:'apply'});
   assert.equal(applied.results[0].applied,true);
+  assert.equal(Object.hasOwn(applied.results[0],'sourceDiagnostics'),false,'diagnostics must remain dry-run only');
   assert.equal(writes.filter(x=>x[0]==='booking').length,1);
   assert.equal(writes.filter(x=>x[0]==='leg').length,2);
   const patch=writes.find(x=>x[0]==='booking')[2];
