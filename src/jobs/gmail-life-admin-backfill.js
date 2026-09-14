@@ -1,10 +1,11 @@
 'use strict';
 
 const {createBackgroundSupabaseClient,resolveOwnerUserId}=require('../auth/background-supabase');
-const {decodeCredentialKey,decryptCredential}=require('../security/credential-crypto');
+const {decodeCredentialKey}=require('../security/credential-crypto');
 const {getGmailConnection}=require('../data/gmail-connections');
 const lifeAdminData=require('../data/life-admin');
 const {createGmailProvider}=require('../services/gmail-provider');
+const {resolveGmailAccessToken}=require('../services/gmail-access-token');
 const {buildGmailLifeAdminActions}=require('../services/gmail-life-admin-actions');
 const {runGmailLifeAdminBackfill,TARGET_SCAN_IDS}=require('../services/gmail-life-admin-backfill');
 
@@ -41,16 +42,43 @@ function lookupMetadata(source){
   };
 }
 
+async function createBackfillProvider({
+  supabase,
+  userId,
+  connection,
+  env=process.env,
+  fetchImpl=global.fetch,
+  decodeCredentialKey:decode=decodeCredentialKey,
+  resolveGmailAccessToken:resolveAccess=resolveGmailAccessToken,
+  createGmailProvider:providerFactory=createGmailProvider
+}={}){
+  const config={
+    calendarCredentialKey:env.CALENDAR_CREDENTIAL_KEY,
+    gmail:{
+      clientId:String(env.GMAIL_CLIENT_ID||''),
+      clientSecret:String(env.GMAIL_CLIENT_SECRET||''),
+      redirectUri:String(env.GMAIL_REDIRECT_URI||'')
+    }
+  };
+  const accessToken=await resolveAccess({
+    supabase,
+    userId,
+    connection,
+    config,
+    credentialKey:decode(env.CALENDAR_CREDENTIAL_KEY),
+    fetchImpl
+  });
+  return providerFactory({fetch:fetchImpl,accessToken});
+}
+
 async function main({env=process.env,fetchImpl=global.fetch}={}){
   assertBackfillConfirmation(env);
   const supabase=createBackgroundSupabaseClient({supabaseUrl:env.SUPABASE_URL,serviceRoleKey:env.SUPABASE_SERVICE_ROLE_KEY});
   const userId=await resolveOwnerUserId(supabase,env.OWNER_GOOGLE_EMAIL);
   const connection=await getGmailConnection(supabase,userId);
   if(!connection||connection.status==='disconnected')throw new Error('No connected Gmail account');
-  if(!connection.access_token_ciphertext)throw new Error('Connected Gmail account is missing access token');
-  const key=decodeCredentialKey(env.CALENDAR_CREDENTIAL_KEY);
-  const accessToken=normalizeAccessToken(decryptCredential(connection.access_token_ciphertext,key));
-  const provider=createGmailProvider({fetch:fetchImpl,accessToken});
+  if(!connection.access_token_ciphertext&&!connection.refresh_token_ciphertext)throw new Error('Connected Gmail account is missing access token');
+  const provider=await createBackfillProvider({supabase,userId,connection,env,fetchImpl});
   const sources=await listBackfillSources(supabase,userId);
   if(sources.length!==523)throw new Error(`Expected exactly 523 historical Gmail source records, found ${sources.length}`);
   const actions=buildGmailLifeAdminActions({supabase,userId,lifeAdminData});
@@ -71,4 +99,4 @@ if(require.main===module){
   main().catch(error=>{console.error('[gmail-life-admin-backfill] failed',{message:error&&error.message});process.exitCode=1;});
 }
 
-module.exports={BACKFILL_CONFIRMATION,assertBackfillConfirmation,normalizeAccessToken,listBackfillSources,lookupMetadata,main};
+module.exports={BACKFILL_CONFIRMATION,assertBackfillConfirmation,normalizeAccessToken,listBackfillSources,lookupMetadata,createBackfillProvider,main};
