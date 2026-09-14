@@ -1,23 +1,25 @@
 const {getNextBirthday}=require('../domain/birthdays');
 const {resolveOffsets,shouldIncludeOnDate,isUrgentEntity,getSydneyLocalParts}=require('../domain/reminders');
 const {getReminderSettings,getReminderOverride,listPushSubscriptions,upsertReminderOccurrence,markReminderSent,markPushSubscriptionFailure,recordNotificationDelivery}=require('../data/reminders');
+const {getMorningDigest}=require('../data/fitness-context');
 const {getCalendarDigest}=require('./calendar-digest');
 const {classifyPushError}=require('../push/web-push');
 
 function dateKeyFromParts(p){return `${p.year}-${String(p.month).padStart(2,'0')}-${String(p.day).padStart(2,'0')}`;}
 function dateKey(value){return value?String(value).slice(0,10):null;}
-function daysBetween(a,b){const parse=s=>{const[y,m,d]=s.split('-').map(Number);return Date.UTC(y,m-1,d);};return Math.round((parse(a)-parse(b))/86400000);}
 function lifeClass(item){if(['appointment','event'].includes(item.category))return'appointment';if(['renewal','membership','subscription'].includes(item.category))return'renewal';return'deadline';}
 function lifeTarget(item){const klass=lifeClass(item);return dateKey(klass==='appointment'?(item.starts_at||item.due_at):(item.due_at||item.starts_at));}
 function deepLink(type,id){if(type==='person')return`/people/${encodeURIComponent(id)}/edit`;if(type==='life_item')return`/life-admin/${encodeURIComponent(id)}`;if(type==='trip')return`/trips/${encodeURIComponent(id)}`;if(type==='task')return`/tasks/${encodeURIComponent(id)}/edit`;return'/';}
 
 async function ownedRows(supabase,table,userId){const result=await supabase.from(table).select('*').eq('user_id',userId);if(result.error)throw result.error;return result.data||[];}
 async function occurrenceByKey(supabase,userId,key){const result=await supabase.from('reminders').select('*').eq('user_id',userId).eq('occurrence_key',key).maybeSingle();if(result.error)throw result.error;return result.data||null;}
+async function latestGmailScan(supabase,userId){const result=await supabase.from('gmail_scan_runs').select('status,started_at,finished_at,records_created_count,records_updated_count,review_items_created_count,error_summary').eq('user_id',userId).order('started_at',{ascending:false}).limit(1);if(result.error)throw result.error;return(result.data||[])[0]||null;}
+async function gmailReviewItems(supabase,userId){const result=await supabase.from('life_items').select('id,title,status,created_at').eq('user_id',userId).eq('status','needs_action').eq('source_metadata->>source','gmail').order('created_at',{ascending:false}).limit(5);if(result.error)throw result.error;return result.data||[];}
 const defaultDeps={
   listPeople:(s,u)=>ownedRows(s,'people',u),listLifeItems:(s,u)=>ownedRows(s,'life_items',u),listTasks:(s,u)=>ownedRows(s,'tasks',u),listTrips:(s,u)=>ownedRows(s,'trips',u),
   getSettings:getReminderSettings,getOverride:getReminderOverride,listSubscriptions:(s,u)=>listPushSubscriptions(s,u,{activeOnly:true}),getOccurrence:occurrenceByKey,
   upsertOccurrence:upsertReminderOccurrence,markSent:markReminderSent,recordDelivery:recordNotificationDelivery,markSubscriptionFailure:markPushSubscriptionFailure,
-  getCalendarDigest:(s,u,n)=>getCalendarDigest({supabase:s,userId:u,now:n})
+  getCalendarDigest:(s,u,n)=>getCalendarDigest({supabase:s,userId:u,now:n}),getMorningDigest:(s,u,d)=>getMorningDigest(s,u,d),getLatestGmailScan:latestGmailScan,listGmailReviewItems:gmailReviewItems
 };
 
 async function eligibleMorningItems({supabase,userId,now,deps}){
@@ -51,7 +53,9 @@ function calendarSummaryBody(calendar,today){
   if(calendar.attentionNeeded)parts.push('sync needs attention');
   return parts.length?`Calendar: ${parts.join(' · ')}`:'';
 }
-function combinedSummaryBody(items,calendar,today){return[summaryBody(items),calendarSummaryBody(calendar,today)].filter(Boolean).join('\n');}
+function fitnessSummaryBody(digest){if(!digest)return'';const parts=[digest.headline,...(Array.isArray(digest.bullets)?digest.bullets.slice(0,2):[])].filter(Boolean);return parts.length?`Morning digest: ${parts.join(' · ')}`:'';}
+function gmailSummaryBody(scan,reviews=[]){const parts=[];if(scan){const status=String(scan.status||'unknown');if(status==='succeeded'){parts.push(`sync complete · ${Number(scan.records_created_count||0)} created · ${Number(scan.records_updated_count||0)} updated · ${Number(scan.review_items_created_count||0)} new review`);}else parts.push(`sync ${status}${scan.error_summary?` · ${scan.error_summary}`:''}`);}if(reviews.length)parts.push(`Items to review: ${reviews.map(x=>x.title).filter(Boolean).join(' · ')}`);return parts.length?`Gmail: ${parts.join(' · ')}`:'';}
+function combinedSummaryBody(items,calendar,today,digest,scan,reviews){return[fitnessSummaryBody(digest),gmailSummaryBody(scan,reviews),summaryBody(items),calendarSummaryBody(calendar,today)].filter(Boolean).join('\n');}
 function subscriptionForPush(row){return{endpoint:row.endpoint,keys:{p256dh:row.p256dh,auth:row.auth_secret}};}
 async function deliver({supabase,userId,reminder,payload,pushTransport,deps}){
   const subscriptions=(await deps.listSubscriptions(supabase,userId)).filter(x=>x.active!==false);let delivered=0;
@@ -62,18 +66,19 @@ async function deliver({supabase,userId,reminder,payload,pushTransport,deps}){
 async function runMorningSummary({supabase,userId,now=new Date(),pushTransport,deps={}}){
   const d={...defaultDeps,...deps};if(!userId)throw new Error('userId is required');if(!pushTransport||typeof pushTransport.send!=='function')throw new Error('pushTransport is required');
   const {today,items}=await eligibleMorningItems({supabase,userId,now,deps:d});
-  const calendar=await d.getCalendarDigest(supabase,userId,now);
-  const calendarEvents=calendar&&Array.isArray(calendar.events)?calendar.events:[],attentionNeeded=Boolean(calendar&&calendar.attentionNeeded),count=items.length+calendarEvents.length+(attentionNeeded?1:0);
+  const [calendar,digest,gmailScan,reviews]=await Promise.all([d.getCalendarDigest(supabase,userId,now),d.getMorningDigest(supabase,userId,today),d.getLatestGmailScan(supabase,userId),d.listGmailReviewItems(supabase,userId)]);
+  const calendarEvents=calendar&&Array.isArray(calendar.events)?calendar.events:[],attentionNeeded=Boolean(calendar&&calendar.attentionNeeded),reviewItems=Array.isArray(reviews)?reviews:[];
+  const count=items.length+calendarEvents.length+(attentionNeeded?1:0)+(digest?1:0)+(gmailScan?1:0)+reviewItems.length;
   if(!count)return{sent:false,count:0};
   const key=`daily-summary:${today}`;const existing=await d.getOccurrence(supabase,userId,key);if(existing&&['sent','acknowledged'].includes(existing.status))return{sent:false,count,deduplicated:true};
   const reminder=existing||await d.upsertOccurrence(supabase,userId,{entity_type:'summary',entity_id:today,reminder_class:'daily_summary',occurrence_key:key,target_date:today,effective_trigger_at:now.toISOString(),status:'pending',deep_link:'/',policy_source:'default'});
-  const payload={title:'preston.ai morning summary',body:combinedSummaryBody(items,{events:calendarEvents,attentionNeeded},today),url:'/',tag:`preston-daily-${today}`};
+  const payload={title:'preston.ai morning summary',body:combinedSummaryBody(items,{events:calendarEvents,attentionNeeded},today,digest,gmailScan,reviewItems),url:'/',tag:`preston-daily-${today}`};
   const delivered=await deliver({supabase,userId,reminder,payload,pushTransport,deps:d});return{sent:delivered>0,count,deliveries:delivered};
 }
 
-async function runUrgentCheck({supabase,userId,now=new Date(),pushTransport,mode,deps={}}){const d={...defaultDeps,...deps};if(!['noon','evening'].includes(mode))throw new Error('Urgent check mode must be noon or evening');const parts=getSydneyLocalParts(now),today=dateKeyFromParts(parts);const [lifeItems,tasks]=await Promise.all([d.listLifeItems(supabase,userId),d.listTasks(supabase,userId)]);const candidates=[...(lifeItems||[]).map(x=>({type:'life_item',row:x})),...(tasks||[]).map(x=>({type:'task',row:x}))].filter(x=>isUrgentEntity(x.row));let totalDelivered=0,considered=0;
-  for(const candidate of candidates){considered++;const {type,row}=candidate,key=`urgent:${type}:${row.id}:${today}`;const existing=await d.getOccurrence(supabase,userId,key);if(existing&&['sent','acknowledged'].includes(existing.status))continue;const target=dateKey(type==='life_item'?lifeTarget(row):row.due_at)||today;const reminder=existing||await d.upsertOccurrence(supabase,userId,{entity_type:type,entity_id:row.id,reminder_class:'urgent',occurrence_key:key,target_date:target,effective_trigger_at:now.toISOString(),status:'pending',deep_link:deepLink(type,row.id),policy_source:'default'});const payload={title:'Urgent · preston.ai',body:row.title,url:deepLink(type,row.id),tag:`preston-urgent-${type}-${row.id}-${today}`};totalDelivered+=await deliver({supabase,userId,reminder,payload,pushTransport,deps:d});}
+async function runUrgentCheck({supabase,userId,now=new Date(),pushTransport,mode,deps={}}){const d={...defaultDeps,...deps};if(!['noon','evening','night'].includes(mode))throw new Error('Urgent check mode must be noon, evening or night');const parts=getSydneyLocalParts(now),today=dateKeyFromParts(parts);const [lifeItems,tasks]=await Promise.all([d.listLifeItems(supabase,userId),d.listTasks(supabase,userId)]);const candidates=[...(lifeItems||[]).map(x=>({type:'life_item',row:x})),...(tasks||[]).map(x=>({type:'task',row:x}))].filter(x=>isUrgentEntity(x.row));let totalDelivered=0,considered=0;
+  for(const candidate of candidates){considered++;const {type,row}=candidate,key=`urgent:${mode}:${type}:${row.id}:${today}`;const existing=await d.getOccurrence(supabase,userId,key);if(existing&&['sent','acknowledged'].includes(existing.status))continue;const target=dateKey(type==='life_item'?lifeTarget(row):row.due_at)||today;const reminder=existing||await d.upsertOccurrence(supabase,userId,{entity_type:type,entity_id:row.id,reminder_class:'urgent',occurrence_key:key,target_date:target,effective_trigger_at:now.toISOString(),status:'pending',deep_link:deepLink(type,row.id),policy_source:'default'});const payload={title:'Urgent · preston.ai',body:row.title,url:deepLink(type,row.id),tag:`preston-urgent-${mode}-${type}-${row.id}-${today}`};totalDelivered+=await deliver({supabase,userId,reminder,payload,pushTransport,deps:d});}
   return{sent:totalDelivered>0,count:considered,deliveries:totalDelivered};
 }
 
-module.exports={runMorningSummary,runUrgentCheck,eligibleMorningItems,defaultDeps};
+module.exports={runMorningSummary,runUrgentCheck,eligibleMorningItems,defaultDeps,fitnessSummaryBody,gmailSummaryBody};
