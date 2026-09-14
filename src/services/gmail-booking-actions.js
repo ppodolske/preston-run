@@ -27,6 +27,7 @@ function bookingInput(candidate={}){
   };
 }
 function extractionMetadata(candidate={},ruleVersion){return{source:'gmail',manual_fields:[],extractor_version:ruleVersion,extraction_confidence:candidate.confidence??null,geography:candidate.geography||null,evidence:Array.isArray(candidate.evidence)?candidate.evidence:[]};}
+function manualTripLock(booking={}){const fields=new Set(Array.isArray(booking.source_metadata&&booking.source_metadata.manual_fields)?booking.source_metadata.manual_fields:[]);return{locked:fields.has('trip_id'),tripId:booking.trip_id||null};}
 
 function buildGmailBookingActions({supabase,userId,bookingData=bookingDataDefault,bookingSourceData=bookingSourceDataDefault,tripData=tripDataDefault,gmailData={recordGmailActivity},reviewData=null,proposeTripLink=proposeTripLinkDefault,ruleVersion='gmail-booking-actions-v0.13.0'}={}){
   const user={id:userId};
@@ -34,7 +35,9 @@ function buildGmailBookingActions({supabase,userId,bookingData=bookingDataDefaul
   return {
     async processBooking({source,candidate,facts=[],trips=[],relatedBookings=[]}){
       const existing=await bookingSourceData.findCanonicalBookingForGmailCandidate(supabase,user,candidate,source);
+      const tripLock=manualTripLock(existing||{});
       const input=bookingInput(candidate);
+      if(tripLock.locked)delete input.trip_id;
       const metadata=extractionMetadata(candidate,ruleVersion);
       let booking;
       let created=false;
@@ -47,6 +50,13 @@ function buildGmailBookingActions({supabase,userId,bookingData=bookingDataDefaul
         await activity({sourceRecordId:source.id,entityType:'booking',entityId:booking&&booking.id,action:'create',oldValue:null,newValue:booking});
       }
       await bookingSourceData.linkBookingSource(supabase,user,booking.id,source.id);
+
+      if(tripLock.locked){
+        const linkDecision=tripLock.tripId
+          ?{kind:'link',tripId:tripLock.tripId,score:100,reasons:['manual_trip_assignment'],proposedTrip:null}
+          :{kind:'none',tripId:null,score:100,reasons:['manual_trip_assignment'],proposedTrip:null};
+        return{booking,created,linkDecision,facts};
+      }
 
       const linkDecision=proposeTripLink({subjectType:'booking',subject:{...candidate,...booking},trips,relatedBookings});
       if(linkDecision.kind==='link'&&linkDecision.tripId){
@@ -68,4 +78,4 @@ function buildGmailBookingActions({supabase,userId,bookingData=bookingDataDefaul
   };
 }
 
-module.exports={buildGmailBookingActions,bookingInput,extractionMetadata};
+module.exports={buildGmailBookingActions,bookingInput,extractionMetadata,manualTripLock};
