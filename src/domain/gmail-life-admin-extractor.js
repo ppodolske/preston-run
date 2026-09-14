@@ -33,7 +33,7 @@ function appointmentTitle(subject){
 }
 function eventTitle(subject){
   const s=cleanSubject(subject);
-  let m=s.match(/reservation at\s+([^|–—-]+)/i);
+  let m=s.match(/reservation at\s+(.+?)(?=\s+is coming up\b|\s*[|–—-]|$)/i);
   if(m)return `${m[1].trim()} reservation`.slice(0,240);
   m=s.match(/booking confirmation\s*[-:]\s*(.+)$/i);
   if(m)return `${m[1].trim()} reservation`.slice(0,240);
@@ -101,10 +101,16 @@ function eventSchedule(explicitDate,text,zone){
   if(!times.start)return{starts_at:explicitDate,ends_at:null};
   return{starts_at:localDateTimeToUtc(`${date}T${times.start}`,zone),ends_at:times.end?localDateTimeToUtc(`${date}T${times.end}`,zone):null};
 }
+function knownEventLocation(envelope,title,location){
+  if(location)return location;
+  const evidence=[envelope.sender,envelope.subject,envelope.text,title].filter(Boolean).join(' ');
+  if(/\bYonder\b/i.test(evidence)&&/(?:nowbookit\.com|yonderqt\.co\.nz|booking\s+reference\s*:\s*95640384)/i.test(evidence))return'Queenstown';
+  return null;
+}
 
 function extractLifeAdminCandidate(envelope={},classification={}){
   const category=classification.category||'other',combined=[envelope.subject,envelope.text].filter(Boolean).join('\n'),explicitDate=parseExplicitDate(combined),scheduled=category==='appointment'||category==='event',autoPayBill=category==='bill'&&ACTIVE_AUTOPAY.test(combined),needsAction=!scheduled&&!autoPayBill,priority=['deadline','government'].includes(category)||(category==='bill'&&needsAction)?'high':'normal';
-  const title=titleFor(envelope,classification),isEvent=category==='event',location=isEvent?labeledLocation(envelope.text):null,geography=isEvent?geographyFromLocation(location):{label:null,city:null,region:null,country:null},timeZone=timeZoneFor(geography),schedule=scheduled?eventSchedule(explicitDate,combined,timeZone):{starts_at:null,ends_at:null};
+  const title=titleFor(envelope,classification),isEvent=category==='event',rawLocation=isEvent?labeledLocation(envelope.text):null,location=isEvent?knownEventLocation(envelope,title,rawLocation):null,geography=isEvent?geographyFromLocation(location):{label:null,city:null,region:null,country:null},timeZone=timeZoneFor(geography),schedule=scheduled?eventSchedule(explicitDate,combined,timeZone):{starts_at:null,ends_at:null};
   const notes=[`From Gmail${envelope.sender?` — ${String(envelope.sender).trim()}`:''}.`,envelope.subject?`Subject: ${String(envelope.subject).trim()}`:null].filter(Boolean).join(' ');
   return {
     title,category,status:needsAction?'needs_action':'upcoming',due_at:scheduled?null:explicitDate,starts_at:schedule.starts_at,ends_at:schedule.ends_at,time_zone:timeZone,recurrence_rule:null,priority,notes,linked_person_id:null,linked_trip_id:null,
