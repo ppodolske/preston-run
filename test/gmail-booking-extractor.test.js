@@ -17,6 +17,7 @@ assert.equal(qantas.candidate.geography.city,'Brisbane');
 assert.match(qantas.candidate.starts_at,/^2026-12-18/);
 assert.doesNotMatch(qantas.candidate.title,/ECECAB/,'confirmation reference must not become the booking title');
 assert.ok(qantas.candidate.confidence>=0.8);
+assert.equal(Array.isArray(qantas.candidate.legs)?qantas.candidate.legs.length:0,0,'Qantas source without a service number must not invent a leg');
 
 const jetstar=extract({
   sender:'Jetstar <itineraries@jetstar.com>',
@@ -41,8 +42,22 @@ assert.equal(jetstarProduction.candidate.origin,'Sydney');
 assert.equal(jetstarProduction.candidate.destination,'Queenstown');
 assert.equal(jetstarProduction.candidate.geography.city,'Queenstown');
 assert.equal(jetstarProduction.candidate.geography.country,'New Zealand');
-assert.match(jetstarProduction.candidate.starts_at,/^2026-08-15/);
-assert.match(jetstarProduction.candidate.ends_at,/^2026-08-22/);
+assert.equal(jetstarProduction.candidate.legs.length,2);
+assert.deepEqual(jetstarProduction.candidate.legs.map(x=>x.service_number),['JQ223','JQ224']);
+assert.equal(jetstarProduction.candidate.legs[0].origin,'Sydney');
+assert.equal(jetstarProduction.candidate.legs[0].destination,'Queenstown');
+assert.equal(jetstarProduction.candidate.legs[0].departure_time_zone,'Australia/Sydney');
+assert.equal(jetstarProduction.candidate.legs[0].arrival_time_zone,'Pacific/Auckland');
+assert.equal(jetstarProduction.candidate.legs[0].departs_at,'2026-08-15T01:50:00.000Z');
+assert.equal(jetstarProduction.candidate.legs[0].arrives_at,'2026-08-15T04:45:00.000Z');
+assert.equal(jetstarProduction.candidate.legs[1].origin,'Queenstown');
+assert.equal(jetstarProduction.candidate.legs[1].destination,'Sydney');
+assert.equal(jetstarProduction.candidate.legs[1].departure_time_zone,'Pacific/Auckland');
+assert.equal(jetstarProduction.candidate.legs[1].arrival_time_zone,'Australia/Sydney');
+assert.equal(jetstarProduction.candidate.legs[1].departs_at,'2026-08-22T05:45:00.000Z');
+assert.equal(jetstarProduction.candidate.legs[1].arrives_at,null,'missing return arrival time must remain null');
+assert.equal(jetstarProduction.candidate.starts_at,'2026-08-15T01:50:00.000Z');
+assert.equal(jetstarProduction.candidate.ends_at,'2026-08-22T05:45:00.000Z');
 assert.doesNotMatch(jetstarProduction.candidate.title,/International Passengers|conditions of carriage/i,'footer prose must never become the flight route');
 
 const jetstarConfirmation=extract({

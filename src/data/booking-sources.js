@@ -5,6 +5,7 @@ function normalizeReference(value){const text=optionalText(value);return text?te
 
 async function linkBookingSource(supabase,user,bookingId,sourceRecordId){const uid=requireUser(user);const r=await supabase.from('booking_source_links').upsert({user_id:uid,booking_id:bookingId,source_record_id:sourceRecordId},{onConflict:'user_id,booking_id,source_record_id',ignoreDuplicates:true}).select('*');if(r.error)throw r.error;return Array.isArray(r.data)?r.data[0]||null:r.data||null;}
 async function listBookingSources(supabase,user,bookingId){const uid=requireUser(user);const r=await supabase.from('booking_source_links').select('*,gmail_source_records(*)').eq('user_id',uid).eq('booking_id',bookingId).order('created_at',{ascending:true});if(r.error)throw r.error;return r.data||[];}
+async function listBookingSourceLinksForEnrichment(supabase,user){const uid=requireUser(user);const r=await supabase.from('booking_source_links').select('booking_id,source_record_id,created_at,bookings(*),gmail_source_records(id,gmail_message_id,gmail_thread_id,sender,subject,received_at,source_link)').eq('user_id',uid).order('booking_id',{ascending:true}).order('created_at',{ascending:true});if(r.error)throw r.error;return r.data||[];}
 async function listBookingsForSource(supabase,user,sourceRecordId){const uid=requireUser(user);const r=await supabase.from('booking_source_links').select('booking_id,bookings(*)').eq('user_id',uid).eq('source_record_id',sourceRecordId);if(r.error)throw r.error;return(r.data||[]).map(row=>row.bookings).filter(Boolean);}
 async function queryReference(supabase,user,reference){const uid=requireUser(user),ref=normalizeReference(reference);if(!ref)return[];const r=await supabase.from('bookings').select('*').eq('user_id',uid).eq('confirmation_reference',ref);if(r.error)throw r.error;return r.data||[];}
 async function queryBookingUrl(supabase,user,url){const uid=requireUser(user),value=optionalText(url);if(!value)return[];const r=await supabase.from('bookings').select('*').eq('user_id',uid).eq('booking_url',value);if(r.error)throw r.error;return r.data||[];}
@@ -20,4 +21,4 @@ async function findCanonicalBookingForGmailCandidate(supabase,user,candidate={},
   return null;
 }
 
-module.exports={linkBookingSource,listBookingSources,listBookingsForSource,findCanonicalBookingForGmailCandidate,normalizeProvider,normalizeReference,queryStrongShape};
+module.exports={linkBookingSource,listBookingSources,listBookingSourceLinksForEnrichment,listBookingsForSource,findCanonicalBookingForGmailCandidate,normalizeProvider,normalizeReference,queryStrongShape};

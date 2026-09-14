@@ -26,6 +26,10 @@ function transport(calls,handler){return{send:async(subscription,payload)=>{call
   assert.match(d.calls.sent[0].payload.body,/Alice/);assert.match(d.calls.sent[0].payload.body,/Renew licence/);assert.match(d.calls.sent[0].payload.body,/Submit form/);assert.match(d.calls.sent[0].payload.body,/Melbourne/);
   assert.equal(d.calls.sent[0].payload.tag,'preston-daily-2026-09-13');assert.equal(d.calls.sent[0].payload.url,'/');assert.equal(d.calls.calendar,1,'morning summary should read calendar digest once');
 
+  const archivedTrip=deps({listTrips:async()=>[{id:'t-archived',title:'Old trip',status:'upcoming',start_date:'2026-09-20',archived_at:'2026-09-14T00:00:00Z'}]});
+  const archivedTripResult=await runMorningSummary({supabase:{},userId:'u1',now:new Date('2026-09-12T21:05:00Z'),pushTransport:transport(archivedTrip.calls),deps:archivedTrip});
+  assert.equal(archivedTripResult.sent,false,'archived future trip must not produce a trip reminder');assert.equal(archivedTrip.calls.sent.length,0);
+
   const calendarOnly=deps({getCalendarDigest:async()=>{calendarOnly.calls.calendar++;return{events:[{title:'Breakfast',all_day:false,starts_at:'2026-09-12T22:00:00Z',status:'confirmed'}],attentionNeeded:false};}});
   let calendarOnlyResult=await runMorningSummary({supabase:{},userId:'u1',now:new Date('2026-09-12T21:05:00Z'),pushTransport:transport(calendarOnly.calls),deps:calendarOnly});
   assert.equal(calendarOnlyResult.sent,true);assert.equal(calendarOnly.calls.occurrences.length,1);assert.equal(calendarOnly.calls.occurrences[0].occurrence_key,'daily-summary:2026-09-13');assert.match(calendarOnly.calls.sent[0].payload.body,/Calendar:/);assert.match(calendarOnly.calls.sent[0].payload.body,/Breakfast/);

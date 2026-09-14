@@ -3,6 +3,7 @@ const {
   validateTripInput,
   validateSegmentInput,
   validateBookingInput,
+  validateBookingLegInput,
   isValidTimeZone,
   localDateTimeToUtc,
   utcToLocalDateTime,
@@ -48,6 +49,12 @@ assert.equal(unlinked.segment_id,null);
 assert.equal(unlinked.booking_type,'transport');
 assert.throws(() => validateBookingInput({title:'Bad',booking_type:'spaceship'}), /booking type/i);
 
+const leg=validateBookingLegInput({service_number:'JQ223',origin:'Sydney',destination:'Queenstown',departs_at:'2026-08-15T11:50',arrives_at:'2026-08-15T16:45',departure_time_zone:'Australia/Sydney',arrival_time_zone:'Pacific/Auckland',position:1});
+assert.equal(leg.service_number,'JQ223');
+assert.equal(leg.departs_at,'2026-08-15T01:50:00.000Z');
+assert.equal(leg.arrives_at,'2026-08-15T04:45:00.000Z');
+assert.throws(()=>validateBookingLegInput({position:1,departs_at:'2026-08-15T17:00',arrives_at:'2026-08-15T16:00',departure_time_zone:'Pacific/Auckland',arrival_time_zone:'Pacific/Auckland'}),/arrival time/i);
+
 const segments = [
   {id:'s1',position:1,title:'Flight',segment_type:'travel',starts_at:'2026-09-13T00:00:00.000Z'},
   {id:'s2',position:2,title:'Drive',segment_type:'travel',starts_at:'2026-09-15T10:00:00.000Z'},
@@ -71,8 +78,10 @@ const trips = [
   {id:'active',title:'Active',status:'in_progress',start_date:'2026-09-10',end_date:'2026-09-20'},
   {id:'next',title:'Next',status:'upcoming',start_date:'2026-10-01',end_date:'2026-10-10'},
   {id:'far',title:'Far',status:'planning',start_date:'2027-10-01',end_date:'2027-10-10'},
-  {id:'cancelled',title:'Cancelled',status:'cancelled',start_date:'2026-09-14',end_date:'2026-09-15'}
+  {id:'cancelled',title:'Cancelled',status:'cancelled',start_date:'2026-09-14',end_date:'2026-09-15'},
+  {id:'archived',title:'Archived',status:'upcoming',start_date:'2026-09-20',end_date:'2026-09-22',archived_at:'2026-09-14T00:00:00Z'}
 ];
 assert.deepEqual(getUpcomingTrips(trips, new Date('2026-09-13T00:00:00Z'), 180).map(x=>x.id), ['active','next']);
+assert.deepEqual(getUpcomingTrips([{id:'a',status:'upcoming',start_date:'2026-09-20',archived_at:'2026-09-14T00:00:00Z'}],new Date('2026-09-14T00:00:00Z')),[]);
 
 console.log('trips domain tests passed');

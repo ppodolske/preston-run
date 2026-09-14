@@ -13,9 +13,10 @@ const { getComingUpLifeItems, getAttentionBuckets, excludeAttentionFromComingUp 
 const { buildDashboardCalendar, getDashboardCalendarWindow } = require('../domain/calendars');
 const { getUpcomingTrips } = require('../domain/trips');
 const { refreshFitnessContext } = require('../services/fitness-context');
+const { loadTravelDashboard } = require('../services/travel-dashboard');
 const { APPS, VERSION } = require('../branding');
 
-function depsFor(context={}){return{listPeople,listLifeItems,listTasks,listTrips,listCalendarDashboardData,getFitnessContext,getMorningDigest,getUpcomingBirthdays,getComingUpLifeItems,getAttentionBuckets,excludeAttentionFromComingUp,buildDashboardCalendar,getUpcomingTrips,refreshFitnessContext,renderHomePage,...(context.siteDeps||{})};}
+function depsFor(context={}){return{listPeople,listLifeItems,listTasks,listTrips,listCalendarDashboardData,getFitnessContext,getMorningDigest,getUpcomingBirthdays,getComingUpLifeItems,getAttentionBuckets,excludeAttentionFromComingUp,buildDashboardCalendar,getUpcomingTrips,refreshFitnessContext,loadTravelDashboard,renderHomePage,...(context.siteDeps||{})};}
 
 async function probe(url) {
   const started = Date.now();
@@ -68,7 +69,7 @@ async function handleSiteRoute(req, res, context) {
       const now=new Date();
       let upcomingBirthdays = [], birthdayDataUnavailable = false;
       let upcomingLifeItems = [], overdueItems = [], todayItems = [], lifeAdminDataUnavailable = false;
-      let upcomingTrips = [], tripDataUnavailable = false;
+      let upcomingTrips = [], tripDataUnavailable = false, travelTrips = [], travelDataUnavailable = false;
       let providerCalendarData={events:[],sources:[]}, calendarDataUnavailable = false;
       let fitnessContext=null, morningDigest=null, fitnessUnavailable=false;
       try {
@@ -104,8 +105,13 @@ async function handleSiteRoute(req, res, context) {
       try {
         const trips = await deps.listTrips(supabase, auth.user);
         upcomingTrips = deps.getUpcomingTrips(trips, now, 180);
-      } catch { tripDataUnavailable = true; }
-      html(res, 200, deps.renderHomePage({ user:auth.user, upcomingBirthdays, birthdayDataUnavailable, upcomingLifeItems, overdueItems, todayItems, lifeAdminDataUnavailable, calendar, calendarDataUnavailable, morningDigest, fitnessContext, fitnessUnavailable, upcomingTrips, tripDataUnavailable }), { 'cache-control':'private, no-store' });
+      } catch { tripDataUnavailable = true; travelDataUnavailable = true; }
+      if(!tripDataUnavailable){
+        try {
+          travelTrips=await deps.loadTravelDashboard({supabase,user:auth.user,trips:upcomingTrips});
+        } catch { travelDataUnavailable = true; travelTrips=[]; }
+      }
+      html(res, 200, deps.renderHomePage({ user:auth.user, upcomingBirthdays, birthdayDataUnavailable, upcomingLifeItems, overdueItems, todayItems, lifeAdminDataUnavailable, calendar, calendarDataUnavailable, morningDigest, fitnessContext, fitnessUnavailable, upcomingTrips, tripDataUnavailable, travelTrips, travelDataUnavailable }), { 'cache-control':'private, no-store' });
       return true;
     }
     if (auth.reason === 'not_owner') {

@@ -14,7 +14,7 @@ function sameValue(a,b){return(a??null)===(b??null);}
 function enrichmentPatch(item={},candidate={}){const protectedFields=manualFields(item),patch={};for(const field of ENRICH_FIELDS){if(!Object.hasOwn(candidate,field)||protectedFields.has(field)||sameValue(item[field],candidate[field]))continue;patch[field]=candidate[field];}return patch;}
 async function recordActivity(gmailData,supabase,userId,entry){if(gmailData&&typeof gmailData.recordGmailActivity==='function')return gmailData.recordGmailActivity(supabase,userId,entry);return null;}
 
-function buildGmailLifeAdminActions({supabase,userId,lifeAdminData=lifeAdminDefault,tripData=tripDefault,gmailData={recordGmailActivity},reviewData=reviewDefault,tripLinker=proposeTripLink,ruleVersion='gmail-life-admin-actions-v0.13.0'}={}){
+function buildGmailLifeAdminActions({supabase,userId,lifeAdminData=lifeAdminDefault,tripData=tripDefault,gmailData={recordGmailActivity},reviewData=reviewDefault,tripLinker=proposeTripLink,ruleVersion='gmail-life-admin-actions-v0.14.0'}={}){
   const user={id:userId};
   return {
     async createLifeAdminItem(source,candidate,classification={}){
@@ -28,7 +28,8 @@ function buildGmailLifeAdminActions({supabase,userId,lifeAdminData=lifeAdminDefa
       if(!item||candidate.category!=='event')return item;
       const protectedFields=manualFields(item);if(protectedFields.has('linked_trip_id')||item.linked_trip_id)return item;
       const trips=tripData&&typeof tripData.listTrips==='function'?await tripData.listTrips(supabase,user):[];
-      const linkDecision=tripLinker({subjectType:'event',subject:candidate,trips:trips||[]});
+      const activeTrips=(trips||[]).filter(t=>!t.archived_at);
+      const linkDecision=tripLinker({subjectType:'event',subject:candidate,trips:activeTrips});
       if(linkDecision.kind==='link'&&linkDecision.tripId&&typeof lifeAdminData.updateLifeItemFromGmail==='function'){
         const oldTrip=item.linked_trip_id||null;item=await lifeAdminData.updateLifeItemFromGmail(supabase,user,item.id,{linked_trip_id:linkDecision.tripId},metadata)||item;
         await recordActivity(gmailData,supabase,userId,{sourceRecordId:source.id,entityType:'life_item',entityId:item.id,fieldName:'linked_trip_id',action:'update',oldValue:oldTrip,newValue:linkDecision.tripId,ruleVersion});

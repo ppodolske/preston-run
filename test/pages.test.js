@@ -46,9 +46,21 @@ const home = renderHomePage({
     ]
   },
   fitnessContext:{fetched_at:'2026-09-13T21:15:00Z'},
-  upcomingTrips:[{id:'trip1',title:'Chicago & Milwaukee',status:'upcoming',start_date:'2026-10-01',end_date:'2026-10-10'}]
+  upcomingTrips:[{id:'trip1',title:'Chicago & Milwaukee',status:'upcoming',start_date:'2026-10-01',end_date:'2026-10-10'}],
+  travelTrips:[{
+    trip:{id:'queenstown',title:'Queenstown',status:'upcoming',start_date:'2026-08-15',end_date:'2026-08-22'},
+    inventory:['Flight','Car','1 Activity'],
+    items:[
+      {type:'booking',id:'b-flight',title:'Sydney → Queenstown flights',tokens:['Jetstar','JQ223 / JQ224','15–22 Aug','Ref QNRY8J'],status:'confirmed'},
+      {type:'booking',id:'b-car',title:'Queenstown car hire',tokens:['Hertz','15–22 Aug','Ref L5920779422'],status:'confirmed'},
+      {type:'event',id:'e-yonder',title:'Yonder reservation',tokens:['Event','17 Aug','6:30–8:00pm','Queenstown','Ref 95640384'],status:'upcoming'}
+    ]
+  }]
 });
-for (const expected of ['preston.ai','/assets/preston-ai-logo.png','Good morning','Dose &amp; Scale','State Parks','Archive','Website admin','id="condition"','/auth/logout','Log out','v0.13.0','Weather','Calendar','Personal','Holidays','Reminders','Planned Workouts','Workout B','Easy Run','Completed','Overdue','Today','Birthdays','Life Admin','Trips','Chicago &amp; Milwaukee','/trips/trip1','/trips','Licence renewal','Pay renewal fee','Call insurer','Urgent','/life-admin/l1','/tasks/t1/edit','Notifications','/notifications','/settings/calendars','/me/settings/gmail','View calendar','href="/calendar"','app-launcher','Morning Digest','Recovery is meaningfully suppressed this morning.','digest-grid','Recovery','Training','Weight trend','Context','Refresh digest','admin-grid','admin-card','preston.run','dose.preston.run','parks.preston.run','archive.preston.run','https://parks.preston.run/park-favicon.svg','https://archive.preston.run/icon.svg']) assert.ok(home.includes(expected),`home missing ${expected}`);
+for (const expected of ['preston.ai','/assets/preston-ai-logo.png','Good morning','Dose &amp; Scale','State Parks','Archive','Website admin','id="condition"','/auth/logout','Log out','v0.14.0','Weather','Calendar','Personal','Holidays','Reminders','Planned Workouts','Workout B','Easy Run','Completed','Overdue','Today','Birthdays','Life Admin','Trips','Queenstown','/trips/queenstown','/trips','Licence renewal','Pay renewal fee','Call insurer','Urgent','/life-admin/l1','/tasks/t1/edit','Notifications','/notifications','/settings/calendars','/me/settings/gmail','View calendar','href="/calendar"','app-launcher','Morning Digest','Recovery is meaningfully suppressed this morning.','digest-grid','Recovery','Training','Weight trend','Context','Refresh digest','admin-grid','admin-card','preston.run','dose.preston.run','parks.preston.run','archive.preston.run','https://parks.preston.run/park-favicon.svg','https://archive.preston.run/icon.svg']) assert.ok(home.includes(expected),`home missing ${expected}`);
+assert.equal((home.match(/data-travel-trip="queenstown"/g)||[]).length,1,'home must render one top-level card per Trip');
+for(const expected of ['Queenstown','Flight · Car · 1 Activity','Sydney → Queenstown flights','Jetstar','JQ223 / JQ224','Ref QNRY8J','Hertz','Yonder reservation'])assert.ok(home.includes(expected),`travel card missing ${expected}`);
+assert.doesNotMatch(home,/data-travel-trip="b-flight"|data-travel-trip="b-car"|data-travel-trip="e-yonder"/,'child travel records must not become top-level Trip cards');
 assert.match(home,/<details class="settings-menu"/);
 assert.match(home,/<summary[^>]*>☰ Settings<\/summary>/);
 assert.doesNotMatch(home,/<a class="button" href="\/notifications">Notifications<\/a>/);
@@ -72,17 +84,17 @@ const nowHtml=home.slice(nowIndex,comingIndex);
 const comingHtml=home.slice(comingIndex,appsIndex);
 const appsHtml=home.slice(appsIndex);
 for(const expected of ['>Now<','Weather','Overdue','Today','Pay renewal fee','Call insurer','Breakfast','Workout B'])assert.ok(nowHtml.includes(expected),`Now section missing ${expected}`);
-for(const expected of ['Coming Up','Pack bag','Easy Run','Birthdays','Alex','Trips','Chicago &amp; Milwaukee','Life Admin','Licence renewal'])assert.ok(comingHtml.includes(expected),`Coming Up section missing ${expected}`);
+for(const expected of ['Coming Up','Pack bag','Easy Run','Birthdays','Alex','Trips','Queenstown','Jetstar','Hertz','Yonder reservation','Life Admin','Licence renewal'])assert.ok(comingHtml.includes(expected),`Coming Up section missing ${expected}`);
 for(const expected of ['Apps &amp; System','app-launcher','Dose &amp; Scale','State Parks','Archive','Website admin','GitHub','Railway'])assert.ok(appsHtml.includes(expected),`Apps & System section missing ${expected}`);
 assert.ok(!nowHtml.includes('Pack bag'),'tomorrow calendar items belong in Coming Up');
 assert.ok(!comingHtml.includes('Pay renewal fee'),'overdue items belong in Now');
 assert.ok(!home.includes('owner@example.com'),'home should not expose owner email');
 assert.ok(!home.includes('ppodolske@gmail.com'),'dashboard must not expose Personal source labels');
 assert.ok(!home.includes('>Home<'),'dashboard must not expose Home source label');
-const unavailable=renderHomePage({user:{},birthdayDataUnavailable:true,lifeAdminDataUnavailable:true,tripDataUnavailable:true,calendarDataUnavailable:true,fitnessUnavailable:true});
+const unavailable=renderHomePage({user:{},birthdayDataUnavailable:true,lifeAdminDataUnavailable:true,tripDataUnavailable:true,travelDataUnavailable:true,calendarDataUnavailable:true,fitnessUnavailable:true});
 assert.ok(unavailable.includes('Birthday data is temporarily unavailable.'));
 assert.ok(unavailable.includes('Life Admin data is temporarily unavailable.'));
-assert.ok(unavailable.includes('Trip data is temporarily unavailable.'));
+assert.ok(unavailable.includes('Trip travel data is temporarily unavailable.'));
 assert.ok(unavailable.includes('Calendar data is temporarily unavailable.'));
 assert.ok(unavailable.includes('Morning Digest is temporarily unavailable.'));
 console.log('page tests passed');
