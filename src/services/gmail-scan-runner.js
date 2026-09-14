@@ -1,7 +1,7 @@
 const {buildEligibleMessagesQuery}=require('./gmail-provider');
 const {findPdfAttachments,decodeBase64Url}=require('./gmail-pdf');
 const {isEligibleReceivedMessage}=require('../domain/gmail-eligibility');
-const {normalizeGmailMessage}=require('../domain/gmail-normalize');
+const {normalizeGmailMessage,extractGmailMessageText}=require('../domain/gmail-normalize');
 const {classifyGmailIntent}=require('../domain/gmail-intent');
 const {extractLifeAdminCandidate}=require('../domain/gmail-life-admin-extractor');
 const {extractTripFacts}=require('../domain/gmail-trip-extractor');
@@ -45,6 +45,7 @@ async function applyTripDecisions({actions,facts,match,source}){
 
 async function extractPdfFacts({message,provider,persistence,source,config,pdfParse}){
   const facts=[];
+  const textFragments=[];
   let unreadableCount=0;
   for(const attachment of findPdfAttachments(message)){
     const attachmentRecord=persistence.upsertAttachment?await persistence.upsertAttachment(source.id,attachment):{id:null,...attachment};
@@ -57,13 +58,14 @@ async function extractPdfFacts({message,provider,persistence,source,config,pdfPa
       result={status:'retry',text:'',reason:String(error.message||error)};
     }
     if(result.status==='processed'){
+      if(String(result.text||'').trim())textFragments.push(String(result.text));
       facts.push(...extractTripFacts({sourceRecordId:source.id,attachmentRecordId:attachmentRecord.id,sender:null,subject:attachment.filename,receivedAt:source.received_at,text:result.text},{parserVersion:config.parserVersion}));
     }else{
       unreadableCount+=1;
       if(persistence.updateAttachmentStatus)await persistence.updateAttachmentStatus(attachmentRecord.id,{processing_status:result.status,processing_reason:result.reason});
     }
   }
-  return {facts,unreadableCount};
+  return {facts,textFragments,unreadableCount};
 }
 
 function countTripDecisions(counters,decisions=[]){
@@ -72,6 +74,18 @@ function countTripDecisions(counters,decisions=[]){
     else if(decision.type==='update_trip')counters.recordsUpdatedCount+=1;
     else if(decision.type==='review')counters.reviewItemsCreatedCount+=1;
   }
+}
+
+function combineEvidence(...values){
+  const seen=new Set();
+  const rows=[];
+  for(const value of values){
+    const text=String(value||'').trim();
+    if(!text||seen.has(text))continue;
+    seen.add(text);
+    rows.push(text);
+  }
+  return rows.join('\n');
 }
 
 async function runGmailScan({supabase,userId,connection,provider,config,existingTrips=[],persistence,actions,lifeAdminActions,pdfParse,intentClassifier=classifyGmailIntent,lifeAdminExtractor=extractLifeAdminCandidate}){
@@ -101,7 +115,8 @@ async function runGmailScan({supabase,userId,connection,provider,config,existing
         const source=await persistence.upsertSource(normalized,scan.id);
         newest=newest||normalized;
         const attachmentNames=findPdfAttachments(message).map(a=>a.filename).filter(Boolean).join(' ');
-        const envelope={sender:normalized.sender,subject:normalized.subject,text:[message.snippet||'',attachmentNames].filter(Boolean).join('\n')};
+        const messageText=extractGmailMessageText(message);
+        const envelope={sender:normalized.sender,subject:normalized.subject,text:combineEvidence(messageText,message.snippet,attachmentNames)};
         const classification=intentClassifier(envelope);
 
         if(classification.intent==='ignore'){
@@ -120,7 +135,7 @@ async function runGmailScan({supabase,userId,connection,provider,config,existing
         }else if(classification.intent==='trip'){
           counters.tripCount+=1;
           counters.relevantCount+=1;
-          const messageFacts=extractTripFacts({sourceRecordId:source.id,sender:normalized.sender,subject:normalized.subject,receivedAt:normalized.received_at,text:message.snippet||''},{parserVersion:resolvedConfig.parserVersion});
+          const messageFacts=extractTripFacts({sourceRecordId:source.id,sender:normalized.sender,subject:normalized.subject,receivedAt:normalized.received_at,text:messageText},{parserVersion:resolvedConfig.parserVersion});
           const pdfResult=await extractPdfFacts({message,provider,persistence,source,config:resolvedConfig,pdfParse});
           counters.pdfUnreadableCount+=pdfResult.unreadableCount;
           const facts=[...messageFacts,...pdfResult.facts];
@@ -149,4 +164,4 @@ async function runGmailScan({supabase,userId,connection,provider,config,existing
   }
 }
 
-module.exports={determineScanWindow,runGmailScan,ymd,applyTripDecisions,defaultActions,defaultLifeAdminActions,extractPdfFacts,countTripDecisions};
+module.exports={determineScanWindow,runGmailScan,ymd,applyTripDecisions,defaultActions,defaultLifeAdminActions,extractPdfFacts,countTripDecisions,combineEvidence};
