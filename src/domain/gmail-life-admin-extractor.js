@@ -1,6 +1,7 @@
 const {localDateTimeToUtc}=require('./date-time');
 const MONTHS={january:1,february:2,march:3,april:4,may:5,june:6,july:7,august:8,september:9,october:10,november:11,december:12};
 const AU_STATES=['NSW','VIC','QLD','SA','WA','TAS','NT','ACT'];
+const ACTIVE_AUTOPAY=/\b(?:currently\s+enrolled\s+in\s+autopay|autopay\s+(?:is\s+)?(?:on|enabled|active)|scheduled\s+payment|will\s+be\s+debited\s+from\s+your\s+account)\b/i;
 
 function isoDate(year,month,day){
   const d=new Date(Date.UTC(Number(year),Number(month)-1,Number(day)));
@@ -102,11 +103,11 @@ function eventSchedule(explicitDate,text,zone){
 }
 
 function extractLifeAdminCandidate(envelope={},classification={}){
-  const category=classification.category||'other',combined=[envelope.subject,envelope.text].filter(Boolean).join('\n'),explicitDate=parseExplicitDate(combined),scheduled=category==='appointment'||category==='event',needsAction=!scheduled,priority=['bill','deadline','government'].includes(category)?'high':'normal';
+  const category=classification.category||'other',combined=[envelope.subject,envelope.text].filter(Boolean).join('\n'),explicitDate=parseExplicitDate(combined),scheduled=category==='appointment'||category==='event',autoPayBill=category==='bill'&&ACTIVE_AUTOPAY.test(combined),needsAction=!scheduled&&!autoPayBill,priority=['deadline','government'].includes(category)||(category==='bill'&&needsAction)?'high':'normal';
   const title=titleFor(envelope,classification),isEvent=category==='event',location=isEvent?labeledLocation(envelope.text):null,geography=isEvent?geographyFromLocation(location):{label:null,city:null,region:null,country:null},timeZone=timeZoneFor(geography),schedule=scheduled?eventSchedule(explicitDate,combined,timeZone):{starts_at:null,ends_at:null};
   const notes=[`From Gmail${envelope.sender?` — ${String(envelope.sender).trim()}`:''}.`,envelope.subject?`Subject: ${String(envelope.subject).trim()}`:null].filter(Boolean).join(' ');
   return {
-    title,category,status:needsAction?'needs_action':'upcoming',due_at:needsAction?explicitDate:null,starts_at:schedule.starts_at,ends_at:schedule.ends_at,time_zone:timeZone,recurrence_rule:null,priority,notes,linked_person_id:null,linked_trip_id:null,
+    title,category,status:needsAction?'needs_action':'upcoming',due_at:scheduled?null:explicitDate,starts_at:schedule.starts_at,ends_at:schedule.ends_at,time_zone:timeZone,recurrence_rule:null,priority,notes,linked_person_id:null,linked_trip_id:null,
     location:isEvent?location:null,provider:isEvent?eventProvider(envelope,title):null,confirmation_reference:isEvent?explicitReference(combined):null,booking_url:isEvent?bookingUrl(envelope.text):null,geography
   };
 }

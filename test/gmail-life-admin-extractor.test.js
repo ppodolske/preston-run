@@ -59,4 +59,10 @@ assert.equal(bill.status,'needs_action');
 assert.equal(bill.due_at,'2026-09-30T00:00:00.000Z');
 assert.equal(bill.priority,'high');
 
+const autoPayBill=extractLifeAdminCandidate({sender:'Capital One <capitalone@notification.capitalone.com>',subject:'Your Venture X Card statement is ready',text:'Statement balance: $70.00\nPayment due date: October 07, 2026\nYou are currently enrolled in AutoPay. The payment amount will be debited from your account on your due date.'},{intent:'life_admin',category:'bill',reason:'bill_due'});
+assert.equal(autoPayBill.category,'bill');
+assert.equal(autoPayBill.status,'upcoming','active AutoPay bills should not be marked as needing manual action');
+assert.equal(autoPayBill.due_at,'2026-10-07T00:00:00.000Z');
+assert.equal(autoPayBill.priority,'normal');
+
 console.log('gmail Life Admin extractor tests passed');
