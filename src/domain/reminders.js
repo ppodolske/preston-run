@@ -1,4 +1,4 @@
-const SYDNEY_TZ='Australia/Sydney';
+const {SYDNEY_TZ,sydneyParts,withinSydneyWindow}=require('./schedule');
 
 const DEFAULT_REMINDER_OFFSETS=Object.freeze({
   birthday:Object.freeze([30,14,7,1]),
@@ -68,21 +68,12 @@ function isUrgentEntity(entity={}){
   return entity.priority==='urgent'&&!terminal.has(entity.status);
 }
 
-function getSydneyLocalParts(now=new Date()){
-  const parts=new Intl.DateTimeFormat('en-AU',{
-    timeZone:SYDNEY_TZ,
-    year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'
-  }).formatToParts(now);
-  const map={};
-  for(const p of parts)if(p.type!=='literal')map[p.type]=p.value;
-  return {year:Number(map.year),month:Number(map.month),day:Number(map.day),hour:Number(map.hour),minute:Number(map.minute),second:Number(map.second)};
-}
+function getSydneyLocalParts(now=new Date()){return sydneyParts(now);}
 
 function shouldRunScheduledMode(mode,now=new Date()){
-  const times={morning:[7,5],noon:[12,0],evening:[18,0]};
+  const times={morning:[7,15],noon:[12,0],evening:[18,0],night:[21,0]};
   if(!times[mode])throw new Error('Invalid scheduled reminder mode');
-  const local=getSydneyLocalParts(now);
-  return local.hour===times[mode][0]&&local.minute===times[mode][1];
+  return withinSydneyWindow(now,times[mode][0],times[mode][1],15);
 }
 
 module.exports={
