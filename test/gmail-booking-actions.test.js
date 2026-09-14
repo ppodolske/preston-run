@@ -60,8 +60,18 @@ const facts=[{fact_type:'booking.identity'}];
   assert.equal(result.linkDecision.kind,'link');
   assert.equal(result.linkDecision.tripId,'manual-trip');
   assert.deepEqual(result.linkDecision.reasons,['manual_trip_assignment']);
-  assert.equal(h.calls.filter(c=>c[0]==='updateBooking'&&Object.hasOwn(c[2],'trip_id')).length,1,'initial enrichment may supply trip_id but matcher must not issue a second relink update');
+  assert.equal(h.calls.filter(c=>c[0]==='updateBooking'&&Object.hasOwn(c[2],'trip_id')).length,0,'manual trip lock must remove trip_id from Gmail enrichment and skip matcher relinks');
   assert.equal(h.calls.some(c=>c[0]==='activity'&&c[1].fieldName==='trip_id'),false,'manual trip assignment must not log a false Gmail relink');
+
+  const manualUnlinkedBooking={...manualTripBooking,id:'b-manual-unlinked',trip_id:null};
+  h=harness({existing:manualUnlinkedBooking,decision:{kind:'create',tripId:null,score:99,reasons:['strong_accommodation'],proposedTrip:{title:'Wrong generated trip'}}});
+  result=await h.actions.processBooking({source:{...source,id:'src-manual-unlinked'},candidate:{...candidate,booking_type:'accommodation'},facts,trips:[]});
+  assert.equal(result.booking.trip_id,null);
+  assert.equal(result.linkDecision.kind,'none');
+  assert.equal(result.linkDecision.tripId,null);
+  assert.deepEqual(result.linkDecision.reasons,['manual_trip_assignment']);
+  assert.equal(h.calls.some(c=>c[0]==='createTrip'),false,'manual No trip choice must prevent generated trip creation');
+  assert.equal(h.calls.some(c=>c[0]==='activity'&&c[1].fieldName==='trip_id'),false);
 
   const createDecision={kind:'create',tripId:null,score:95,reasons:['strong_accommodation'],proposedTrip:{title:'Bowral, NSW',start_date:'2026-12-20',end_date:'2026-12-22',destination_label:'Bowral, NSW',destination_city:'Bowral',destination_region:'NSW',destination_country:'Australia',status:'planning'}};
   h=harness({decision:createDecision});
