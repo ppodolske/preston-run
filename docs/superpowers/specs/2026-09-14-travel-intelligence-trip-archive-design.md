@@ -460,7 +460,7 @@ Badges are presentation only. No separate database badge system is introduced.
 
 ### 9.2 Booking type summary on Trip header/card
 
-Trip card/detail header may show a concise inventory derived from linked records, for example:
+Trip card/detail header shows a concise inventory derived from linked records, for example:
 
 ```text
 Flight · Stay · Car · 2 Activities
@@ -490,7 +490,7 @@ There will be one canonical Booking editor.
 - Add Booking from Trip: `/bookings/new?trip_id=<trip-id>`
 - Edit Booking: `/bookings/<booking-id>/edit`
 
-Legacy nested Trip Booking creation routes may redirect to the canonical editor for compatibility.
+Legacy nested Trip Booking creation routes redirect to the canonical editor for compatibility.
 
 ### 10.2 Field parity
 
@@ -509,7 +509,19 @@ The canonical editor must expose all supported Booking fields consistently, incl
 - booking URL;
 - notes.
 
-Booking Legs should display beneath transport Bookings. Manual leg editing is allowed but should remain intentionally lightweight rather than becoming a full airline itinerary editor.
+Booking Legs display beneath transport Bookings. Manual leg editing is allowed but remains intentionally lightweight rather than becoming a full airline itinerary editor.
+
+### 10.3 Archived Trips in manual Booking editing
+
+Automation excludes archived Trips, but manual editing must remain capable of maintaining historical records.
+
+Rules:
+
+- the Trip selector groups active and archived Trips distinctly;
+- an existing Booking linked to an archived Trip remains editable with that Trip selected;
+- a user may manually assign or reassign a Booking to an archived Trip;
+- the Add Booking action from an archived Trip detail page preselects that archived Trip;
+- these manual actions receive normal `manual_fields` protection and must not later be undone by Gmail.
 
 ## 11. Archive lifecycle
 
@@ -517,17 +529,39 @@ Booking Legs should display beneath transport Bookings. Manual leg editing is al
 
 Normal `/trips` shows unarchived Trips only.
 
-The page contains an obvious link/action to **Archived Trips**.
+It has distinct presentation for:
+
+- Coming Up / current Trips; and
+- Past, unarchived Trips that have ended but have not yet been archived.
+
+A Trip can therefore remain visible after its dates have passed until the user chooses Archive. The UI may label it `Ended yesterday`, `Ended 3 days ago`, etc., without silently mutating its stored status.
+
+This is the path the user will use to archive Bowral and Queenstown after v0.14.0 is validated.
+
+The page also contains an obvious link/action to **Archived Trips**.
 
 ### 11.2 Archived Trip list
 
-`/trips/archived` lists Trips where `archived_at is not null`, newest archive first or most-recent Trip date first.
+`/trips/archived` lists Trips where `archived_at is not null`.
 
-Archived Trip detail remains fully accessible.
+Ordering is deterministic:
+
+1. `end_date` descending, nulls last;
+2. `start_date` descending, nulls last;
+3. `archived_at` descending;
+4. title ascending.
+
+Archived Trip detail remains fully viewable and manually editable. Archive means historical visibility state, not read-only state.
 
 ### 11.3 Archive action
 
-A manual archive action:
+Route:
+
+```text
+POST /trips/:id/archive
+```
+
+The action:
 
 - requires authenticated owner and same-origin POST;
 - sets `archived_at = now()`;
@@ -535,13 +569,22 @@ A manual archive action:
 - leaves all Bookings, Stages, Events, Tasks and provenance intact;
 - redirects back to a stable Trip/archive view with flash confirmation.
 
+Calling Archive on an already archived Trip is idempotent and does not alter `archived_at` again unless the implementation explicitly chooses to treat it as a no-op response. The preferred behaviour is no-op success.
+
 ### 11.4 Unarchive action
 
-A manual unarchive action:
+Route:
+
+```text
+POST /trips/:id/unarchive
+```
+
+The action:
 
 - clears `archived_at`;
 - leaves current status unchanged;
-- leaves linked records untouched.
+- leaves linked records untouched;
+- is idempotent when the Trip is already unarchived.
 
 ### 11.5 Archive is not delete
 
@@ -592,6 +635,8 @@ These display states do not themselves persist status changes.
 
 The only automatic status change introduced in this release is the explicit manual Archive action setting non-cancelled Trips to completed.
 
+Archived Trips are also excluded from scheduled Trip-level reminder generation. Linked Life Admin Events retain their own lifecycle and are not silently deleted, completed or hidden merely because their Trip is archived.
+
 ## 14. Error handling and safety
 
 ### 14.1 Schema migration
@@ -637,7 +682,9 @@ Test:
 - type inventory/count formatting;
 - current/future “Next” selection;
 - archived Trip exclusion from active/upcoming lists;
+- ended-unarchived Trip presentation;
 - archive status transition rules;
+- archive/unarchive idempotency;
 - unarchive status preservation.
 
 ### 15.2 Extractor tests
@@ -667,6 +714,7 @@ Test:
 - Gmail leg upsert/idempotency;
 - manual leg field locks;
 - archived filtering;
+- manual assignment to archived Trips;
 - batch retrieval for dashboard Trip view models.
 
 ### 15.4 Route/UI tests
@@ -675,9 +723,11 @@ Test:
 
 - canonical Booking editor parity;
 - legacy nested add-Booking redirect;
+- archived Trip present in manual Booking selector;
 - archive/unarchive POST controls;
-- archived list visibility;
-- archived detail access;
+- archived list visibility/order;
+- past-unarchived list visibility;
+- archived detail access/editing;
 - no Next card for fully historical Trip;
 - dashboard one-card-per-Trip composition.
 
@@ -689,7 +739,15 @@ Test all three cases:
 2. existing Booking attached to archived Trip stays attached when updated;
 3. existing archived Booking does not cause a replacement Trip to be generated.
 
-### 15.6 Release verification
+### 15.6 Reminder tests
+
+Test:
+
+- archived Trips do not produce Trip-level reminders;
+- unarchiving makes the Trip eligible for Trip reminder logic again when dates/status otherwise qualify;
+- linked Life Admin Events are not altered by Trip archive state.
+
+### 15.7 Release verification
 
 Before production apply:
 
@@ -724,7 +782,8 @@ Production release must leave Bowral and Queenstown unarchived. The user will ar
 - canonicalise `/bookings` editor;
 - Trip “Add booking” links into canonical editor with preselected Trip;
 - redirect/remove duplicate user-facing nested form logic;
-- add lightweight transport leg presentation/edit support.
+- add lightweight transport leg presentation/edit support;
+- keep archived Trips available for explicit manual assignment.
 
 ### Phase D — Trip detail UX
 
@@ -744,9 +803,10 @@ Production release must leave Bowral and Queenstown unarchived. The user will ar
 ### Phase F — Archive lifecycle
 
 - archive/unarchive routes;
-- active/archived list separation;
+- active/past-unarchived/archived list separation;
 - archived-state UI;
-- status transition on archive.
+- status transition on archive;
+- reminder exclusion.
 
 ### Phase G — Gmail archive safety
 
@@ -776,17 +836,21 @@ v0.14.0 is complete only when all of the following are true:
 7. Booking type badges are derived from existing Booking/Event data rather than persisted separately.
 8. Trip Segments are presented as optional Stages, not Booking-type categories.
 9. There is one canonical Booking editor with field parity.
-10. Trip “Next” points to the earliest current/future itinerary item rather than the first historical item.
-11. Archive is reversible and preserves every linked Booking, Stage, Event, Task and Gmail source link.
-12. Archiving a non-cancelled Trip marks it completed; archiving a cancelled Trip preserves cancelled status.
-13. Unarchive clears archive state without silently changing status.
-14. Archived Trips disappear from active/home upcoming lists and remain accessible in Archived Trips.
-15. New Gmail candidates do not auto-link to archived Trips.
-16. Existing canonical Bookings already attached to archived Trips stay attached when Gmail updates them.
-17. Gmail never creates a replacement Trip solely because an existing Booking’s Trip is archived.
-18. Targeted enrichment is dry-run-first, apply-gated and idempotent.
-19. Bowral and Queenstown are not archived by the release process itself.
-20. Full CI and production smoke verification pass before release completion.
+10. Manual Booking editing can maintain or assign historical Bookings to archived Trips, while Gmail automation cannot auto-link new Bookings to archived Trips.
+11. Trip “Next” points to the earliest current/future itinerary item rather than the first historical item.
+12. Past unarchived Trips remain visible with an Archive action until the user archives them.
+13. Archive is reversible and preserves every linked Booking, Stage, Event, Task and Gmail source link.
+14. Archiving a non-cancelled Trip marks it completed; archiving a cancelled Trip preserves cancelled status.
+15. Archive and Unarchive actions are idempotent.
+16. Unarchive clears archive state without silently changing status.
+17. Archived Trips disappear from active/home upcoming lists and remain accessible/editable in Archived Trips.
+18. Archived Trips do not generate Trip-level reminders.
+19. New Gmail candidates do not auto-link to archived Trips.
+20. Existing canonical Bookings already attached to archived Trips stay attached when Gmail updates them.
+21. Gmail never creates a replacement Trip solely because an existing Booking’s Trip is archived.
+22. Targeted enrichment is dry-run-first, apply-gated and idempotent.
+23. Bowral and Queenstown are not archived by the release process itself.
+24. Full CI and production smoke verification pass before release completion.
 
 ## 18. Key decisions
 
@@ -799,6 +863,8 @@ The design intentionally makes these choices:
 - **Trip Segments remain but are presented as Stages.** Booking types remain Booking types.
 - **The home page shows one Trip card with compact child rows, not separate top-level travel cards.**
 - **Badges are derived UI, not persisted classification data.**
+- **Archived Trips remain manually editable and manually linkable, but are excluded from automatic Gmail linking.**
+- **Past Trips are not auto-archived.** They remain visible until the user explicitly archives them.
 - **No automatic Stage creation or automatic Trip archiving in v0.14.0.**
 - **No full historical Gmail replay.** Existing canonical source links are the enrichment boundary.
 
