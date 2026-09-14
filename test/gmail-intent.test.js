@@ -49,6 +49,9 @@ assert.equal(classify('CA ANZ <service@example.com>','Preston, thank you for ren
 assert.deepEqual(classify('billing@example.com','Invoice 4412 payment due 30 September 2026'),{
   intent:'life_admin',category:'bill',confidence:0.9,reason:'bill_due'
 });
+assert.deepEqual(classify('Capital One <capitalone@notification.capitalone.com>','Your Venture X Card statement is ready','Statement balance: $70.00\nMinimum payment: $25.00\nPayment due date: October 07, 2026\nYou are currently enrolled in AutoPay.\nManage your subscription preferences.'),{
+  intent:'life_admin',category:'bill',confidence:0.9,reason:'bill_due'
+},'statement + due must outrank incidental subscription footer language');
 assert.equal(classify('Kmart <orders@example.com>','Your Kmart Invoice #654798138').intent,'ignore','ordinary invoices/receipts are not actionable bills');
 assert.equal(classify('Railway <billing@example.com>','Your receipt from Railway Corporation #2565-9473').intent,'ignore');
 
