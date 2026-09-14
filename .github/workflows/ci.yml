@@ -23,10 +23,6 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - name: Generate v0.13 migration filename (temporary)
-        run: |
-          npx --yes supabase migration new v0130_trip_booking_event_linkage
-          ls -1 supabase/migrations/*_v0130_trip_booking_event_linkage.sql
       - run: npm test
       - run: node --check server.js
       - run: node --check src/data/fitness-context.js
