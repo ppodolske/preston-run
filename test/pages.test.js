@@ -57,7 +57,7 @@ const home = renderHomePage({
     ]
   }]
 });
-for (const expected of ['preston.ai','/assets/preston-ai-logo.png','Good morning','Dose &amp; Scale','State Parks','Archive','Website admin','id="condition"','/auth/logout','Log out','v0.13.0','Weather','Calendar','Personal','Holidays','Reminders','Planned Workouts','Workout B','Easy Run','Completed','Overdue','Today','Birthdays','Life Admin','Trips','Chicago &amp; Milwaukee','/trips/trip1','/trips','Licence renewal','Pay renewal fee','Call insurer','Urgent','/life-admin/l1','/tasks/t1/edit','Notifications','/notifications','/settings/calendars','/me/settings/gmail','View calendar','href="/calendar"','app-launcher','Morning Digest','Recovery is meaningfully suppressed this morning.','digest-grid','Recovery','Training','Weight trend','Context','Refresh digest','admin-grid','admin-card','preston.run','dose.preston.run','parks.preston.run','archive.preston.run','https://parks.preston.run/park-favicon.svg','https://archive.preston.run/icon.svg']) assert.ok(home.includes(expected),`home missing ${expected}`);
+for (const expected of ['preston.ai','/assets/preston-ai-logo.png','Good morning','Dose &amp; Scale','State Parks','Archive','Website admin','id="condition"','/auth/logout','Log out','v0.13.0','Weather','Calendar','Personal','Holidays','Reminders','Planned Workouts','Workout B','Easy Run','Completed','Overdue','Today','Birthdays','Life Admin','Trips','Queenstown','/trips/queenstown','/trips','Licence renewal','Pay renewal fee','Call insurer','Urgent','/life-admin/l1','/tasks/t1/edit','Notifications','/notifications','/settings/calendars','/me/settings/gmail','View calendar','href="/calendar"','app-launcher','Morning Digest','Recovery is meaningfully suppressed this morning.','digest-grid','Recovery','Training','Weight trend','Context','Refresh digest','admin-grid','admin-card','preston.run','dose.preston.run','parks.preston.run','archive.preston.run','https://parks.preston.run/park-favicon.svg','https://archive.preston.run/icon.svg']) assert.ok(home.includes(expected),`home missing ${expected}`);
 assert.equal((home.match(/data-travel-trip="queenstown"/g)||[]).length,1,'home must render one top-level card per Trip');
 for(const expected of ['Queenstown','Flight · Car · 1 Activity','Sydney → Queenstown flights','Jetstar','JQ223 / JQ224','Ref QNRY8J','Hertz','Yonder reservation'])assert.ok(home.includes(expected),`travel card missing ${expected}`);
 assert.doesNotMatch(home,/data-travel-trip="b-flight"|data-travel-trip="b-car"|data-travel-trip="e-yonder"/,'child travel records must not become top-level Trip cards');
@@ -94,7 +94,7 @@ assert.ok(!home.includes('>Home<'),'dashboard must not expose Home source label'
 const unavailable=renderHomePage({user:{},birthdayDataUnavailable:true,lifeAdminDataUnavailable:true,tripDataUnavailable:true,travelDataUnavailable:true,calendarDataUnavailable:true,fitnessUnavailable:true});
 assert.ok(unavailable.includes('Birthday data is temporarily unavailable.'));
 assert.ok(unavailable.includes('Life Admin data is temporarily unavailable.'));
-assert.ok(unavailable.includes('Trip data is temporarily unavailable.'));
+assert.ok(unavailable.includes('Trip travel data is temporarily unavailable.'));
 assert.ok(unavailable.includes('Calendar data is temporarily unavailable.'));
 assert.ok(unavailable.includes('Morning Digest is temporarily unavailable.'));
 console.log('page tests passed');
