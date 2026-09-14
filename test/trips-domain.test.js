@@ -78,8 +78,10 @@ const trips = [
   {id:'active',title:'Active',status:'in_progress',start_date:'2026-09-10',end_date:'2026-09-20'},
   {id:'next',title:'Next',status:'upcoming',start_date:'2026-10-01',end_date:'2026-10-10'},
   {id:'far',title:'Far',status:'planning',start_date:'2027-10-01',end_date:'2027-10-10'},
-  {id:'cancelled',title:'Cancelled',status:'cancelled',start_date:'2026-09-14',end_date:'2026-09-15'}
+  {id:'cancelled',title:'Cancelled',status:'cancelled',start_date:'2026-09-14',end_date:'2026-09-15'},
+  {id:'archived',title:'Archived',status:'upcoming',start_date:'2026-09-20',end_date:'2026-09-22',archived_at:'2026-09-14T00:00:00Z'}
 ];
 assert.deepEqual(getUpcomingTrips(trips, new Date('2026-09-13T00:00:00Z'), 180).map(x=>x.id), ['active','next']);
+assert.deepEqual(getUpcomingTrips([{id:'a',status:'upcoming',start_date:'2026-09-20',archived_at:'2026-09-14T00:00:00Z'}],new Date('2026-09-14T00:00:00Z')),[]);
 
 console.log('trips domain tests passed');
