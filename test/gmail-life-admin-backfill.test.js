@@ -24,23 +24,60 @@ const sources=[
   };
   const isAlreadyHandled=async source=>handledThreads.has(source.gmail_thread_id);
 
-  const first=await runGmailLifeAdminBackfill({sources,provider,actions,isAlreadyHandled});
+  const first=await runGmailLifeAdminBackfill({sources,provider,actions,isAlreadyHandled,interMessageDelayMs:0});
   assert.deepEqual(first,{total:5,lifeAdminCreated:1,reviewCreated:1,tripSkipped:1,ignored:1,alreadyHandled:1,errors:0});
   assert.equal(created.filter(x=>x[0]==='life').length,1);
   assert.equal(created.filter(x=>x[0]==='review').length,1);
   assert.equal(created.some(x=>x[1]==='s3'),false,'Trip-classified messages must never call a mutating action');
 
-  const second=await runGmailLifeAdminBackfill({sources,provider,actions,isAlreadyHandled});
+  const second=await runGmailLifeAdminBackfill({sources,provider,actions,isAlreadyHandled,interMessageDelayMs:0});
   assert.deepEqual(second,{total:5,lifeAdminCreated:0,reviewCreated:0,tripSkipped:1,ignored:1,alreadyHandled:3,errors:0});
   assert.equal(created.length,2,'rerunning the backfill must not duplicate Life Admin or review items');
 
+  const brokenAttempts=[];
   const broken=await runGmailLifeAdminBackfill({
     sources:[{id:'bad',gmail_message_id:'missing',gmail_thread_id:'tb',sender:'Physio',subject:'Appointment confirmation'}],
-    provider:{getMessage:async()=>{throw new Error('not found');}},
+    provider:{getMessage:async()=>{brokenAttempts.push(1);const error=new Error('not found');error.status=404;throw error;}},
     actions,
-    isAlreadyHandled
+    isAlreadyHandled,
+    interMessageDelayMs:0,
+    sleep:async()=>{}
   });
   assert.equal(broken.errors,1);
   assert.equal(broken.total,1);
+  assert.equal(brokenAttempts.length,1,'non-retryable Gmail errors should not be retried');
+
+  let throttleAttempts=0;
+  let throttleCreates=0;
+  const throttleSleeps=[];
+  const throttled=await runGmailLifeAdminBackfill({
+    sources:[{id:'retry',gmail_message_id:'retry-message',gmail_thread_id:'retry-thread',sender:'HealthShare <no-reply@healthshare.com.au>',subject:'Reminder: Eye Test appointment is coming up',received_at:'2026-09-02T00:00:00Z'}],
+    provider:{getMessage:async()=>{throttleAttempts+=1;if(throttleAttempts<3){const error=new Error('rate limited');error.status=429;throw error;}return{threadId:'retry-thread',snippet:'Appointment 30 September 2026'};}},
+    actions:{createLifeAdminItem:async()=>{throttleCreates+=1;return{id:'life-retry'};},createReviewItem:async()=>({id:'review-retry'})},
+    isAlreadyHandled:async()=>false,
+    retryDelaysMs:[1,2,3],
+    interMessageDelayMs:0,
+    sleep:async ms=>{throttleSleeps.push(ms);}
+  });
+  assert.equal(throttleAttempts,3,'429 responses should be retried');
+  assert.deepEqual(throttleSleeps,[1,2]);
+  assert.equal(throttled.errors,0);
+  assert.equal(throttled.lifeAdminCreated,1);
+  assert.equal(throttleCreates,1);
+
+  const paceSleeps=[];
+  await runGmailLifeAdminBackfill({
+    sources:[
+      {id:'p1',gmail_message_id:'pm1',gmail_thread_id:'pt1',sender:'Commonwealth Bank <news@example.com>',subject:'Book your next holiday with your CommBank credit card'},
+      {id:'p2',gmail_message_id:'pm2',gmail_thread_id:'pt2',sender:'Commonwealth Bank <news@example.com>',subject:'Book your next holiday with your CommBank credit card'}
+    ],
+    provider:{getMessage:async id=>({id,threadId:id,snippet:''})},
+    actions,
+    isAlreadyHandled:async()=>false,
+    interMessageDelayMs:125,
+    sleep:async ms=>{paceSleeps.push(ms);}
+  });
+  assert.deepEqual(paceSleeps,[125],'backfill should pace Gmail reads between messages');
+
   console.log('gmail Life Admin backfill tests passed');
 })().catch(error=>{console.error(error);process.exit(1);});
