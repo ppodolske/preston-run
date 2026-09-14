@@ -28,8 +28,21 @@ function parseSlashDates(text){return [...String(text||'').matchAll(/\b(\d{1,2})
 function parseLongDates(text){return [...String(text||'').matchAll(/\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})\b/gi)].map(m=>dateIso(Number(m[3]),MONTHS[m[2].toLowerCase()],Number(m[1])));}
 function parseMonthFirstDates(text){return [...String(text||'').matchAll(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),\s*(\d{4})\b/gi)].map(m=>dateIso(Number(m[3]),MONTHS[m[1].toLowerCase()],Number(m[2])));}
 function firstRoute(text){const m=String(text||'').match(/\b([A-Z][A-Za-z .'-]{1,40}?)\s+to\s+([A-Z][A-Za-z .'-]{1,40}?)(?=\s+\d{1,2}[\/\s]|\s+on\b|[.;\n]|$)/);return m?{origin:clean(m[1]),destination:clean(m[2])}:null;}
-function statusFromText(text){return /\b(?:cancelled|canceled|cancellation)\b/i.test(text)?'cancelled':'confirmed';}
-function bookingUrl(text){const m=String(text||'').match(/https?:\/\/[^\s<>"']+/i);return m?m[0].replace(/[),.;]+$/,''):null;}
+function statusFromText(text){
+  const value=String(text||'');
+  const subjectLike=value.split(/\n/,2).join(' ');
+  if(/\b(?:booking|reservation|flight|trip|rental|vehicle)\b[^.\n]{0,60}\b(?:has been|was|is)?\s*(?:cancelled|canceled)\b/i.test(value))return'cancelled';
+  if(/\b(?:cancelled|canceled)\b[^.\n]{0,40}\b(?:booking|reservation|flight|trip|rental)\b/i.test(subjectLike))return'cancelled';
+  return'confirmed';
+}
+function bookingUrl(text){
+  const value=String(text||'');
+  const contextual=value.match(/(?:manage|modify|view)(?:\s+(?:your|my|the))?\s+(?:booking|reservation|rental|trip)?[^\n]{0,100}?(https?:\/\/[^\s<>"']+)/i);
+  const urls=[...value.matchAll(/https?:\/\/[^\s<>"']+/gi)].map(m=>m[0].replace(/[),.;]+$/,''));
+  const valid=url=>url&&!/\b(?:www\.)?w3\.org\/2001\/XMLSchema|schemas\.microsoft\.com/i.test(url);
+  if(contextual&&valid(contextual[1]))return contextual[1].replace(/[),.;]+$/,'');
+  return urls.find(valid)||null;
+}
 function geography(label,city,region,country){return{label:clean(label),city:clean(city),region:clean(region),country:clean(country)};}
 function baseCandidate(overrides={}){return{booking_type:'other',provider:null,confirmation_reference:null,title:'Travel booking',status:'confirmed',starts_at:null,ends_at:null,time_zone:'Australia/Sydney',location:null,origin:null,destination:null,booking_url:null,geography:geography(null,null,null,null),confidence:0.55,evidence:[],...overrides};}
 
@@ -53,7 +66,10 @@ function parseBookingCom(envelope,text){
   const ref=normalizeReference((text.match(/\bConfirmation\s*:\s*([A-Z0-9-]{5,25})\b/i)||[])[1])||explicitReference(text);
   const title=clean((String(envelope.subject||'').match(/confirmed at\s+(.+)$/i)||[])[1])||'Booking.com accommodation';
   const geoMatch=text.match(/\b(Bowral)\s*,\s*(New South Wales|NSW)\s*,\s*(Australia)\b/i);
-  const city=geoMatch&&geoMatch[1],region=geoMatch&&geoMatch[2],country=geoMatch&&geoMatch[3];
+  const mentionsBowral=/\bBowral\b/i.test(text);
+  const city=geoMatch&&geoMatch[1]||mentionsBowral?'Bowral':null;
+  const region=geoMatch&&geoMatch[2]||mentionsBowral?'NSW':null;
+  const country=geoMatch&&geoMatch[3]||mentionsBowral?'Australia':null;
   const dates=parseLongDates(text);
   return baseCandidate({booking_type:'accommodation',provider:'Booking.com',confirmation_reference:ref,title,status:statusFromText(text),starts_at:dates[0]||null,ends_at:dates[1]||null,location:city,booking_url:bookingUrl(text),geography:geography(city&&region?`${city}, ${region==='New South Wales'?'NSW':region}`:city,city,region,country),confidence:ref&&city&&dates[0]?0.98:0.83,evidence:['provider:booking.com',ref?'reference:explicit':null,city?'geography:parsed':null,dates.length?'dates:parsed':null].filter(Boolean)});
 }
@@ -65,8 +81,15 @@ function parseAirbnb(envelope,text){
 function parseHertz(envelope,text){
   if(!/hertz/i.test(`${envelope.sender||''} ${envelope.subject||''}`))return null;
   const ref=normalizeReference((text.match(/\b(?:Hertz Reservation|Confirmation)\s+([A-Z0-9-]{5,25})\b/i)||[])[1])||explicitReference(text);
-  const cityMatch=text.match(/\b([A-Z][A-Za-z .'-]{2,30})\s+Airport\b/);const city=cityMatch&&titleCasePlace(cityMatch[1]);const dates=[...parseLongDates(text),...parseMonthFirstDates(text)].slice(0,2);
-  return baseCandidate({booking_type:'hire_car',provider:'Hertz',confirmation_reference:ref,title:city?`Hertz car hire · ${city}`:'Hertz car hire',status:statusFromText(text),starts_at:dates[0]||null,ends_at:dates[1]||null,location:city?`${city} Airport`:null,booking_url:bookingUrl(text),geography:geography(city,city,null,city&&/queenstown/i.test(city)?'New Zealand':null),confidence:ref?0.96:0.78,evidence:['provider:hertz',ref?'reference:explicit':null,city?'geography:parsed':null,dates.length?'dates:parsed':null].filter(Boolean)});
+  let city=null;
+  if(/\bQueenstown Airport\b/i.test(text))city='Queenstown';
+  else{
+    const cityMatch=text.match(/\b(?:pick-?up|return|location|rental location)\s*:?\s*([A-Z][A-Za-z .'-]{2,30}?)\s+Airport\b/i);
+    city=cityMatch&&titleCasePlace(cityMatch[1]);
+  }
+  const dates=[...parseLongDates(text),...parseMonthFirstDates(text)].slice(0,2);
+  const nz=city&&/queenstown/i.test(city);
+  return baseCandidate({booking_type:'hire_car',provider:'Hertz',confirmation_reference:ref,title:city?`Hertz car hire · ${city}`:'Hertz car hire',status:statusFromText(text),starts_at:dates[0]||null,ends_at:dates[1]||null,time_zone:nz?'Pacific/Auckland':'Australia/Sydney',location:city?`${city} Airport`:null,booking_url:bookingUrl(text),geography:geography(city,city,null,nz?'New Zealand':null),confidence:ref?0.96:0.78,evidence:['provider:hertz',ref?'reference:explicit':null,city?'geography:parsed':null,dates.length?'dates:parsed':null].filter(Boolean)});
 }
 function parseFareHarbor(envelope,text){
   if(!/fareharbor|cruise te anau|discovery cruise/i.test(`${envelope.sender||''} ${envelope.subject||''} ${text}`))return null;
