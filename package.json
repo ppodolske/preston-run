@@ -15,7 +15,8 @@
     "job:fitness:sync": "node src/jobs/fitness-context-sync.js",
     "job:gmail:scan": "node src/jobs/gmail-manual-scan.js",
     "job:gmail:life-admin-backfill": "node src/jobs/gmail-life-admin-backfill.js",
-    "job:gmail:trip-reconstruction": "node src/jobs/gmail-trip-reconstruction.js"
+    "job:gmail:trip-reconstruction": "node src/jobs/gmail-trip-reconstruction.js",
+    "job:gmail:booking-enrichment": "node src/jobs/gmail-booking-enrichment.js"
   },
   "dependencies": {
     "@supabase/ssr": "0.10.3",
