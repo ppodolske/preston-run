@@ -44,11 +44,11 @@ function classifyGmailIntent(envelope={}){
   if(has(content,MEMBERSHIP)&&has(content,MEMBERSHIP_ACTION)&&!has(content,COMPLETED_MEMBERSHIP)){
     return {intent:'life_admin',category:'membership',confidence:0.9,reason:'membership_renewal'};
   }
-  if(has(content,SUBSCRIPTION)&&has(content,SUBSCRIPTION_ACTION)){
-    return {intent:'life_admin',category:'subscription',confidence:0.9,reason:'subscription_renewal'};
-  }
   if(has(content,BILL_NOUN)&&has(content,BILL_ACTION)){
     return {intent:'life_admin',category:'bill',confidence:0.9,reason:'bill_due'};
+  }
+  if(has(content,SUBSCRIPTION)&&has(content,SUBSCRIPTION_ACTION)){
+    return {intent:'life_admin',category:'subscription',confidence:0.9,reason:'subscription_renewal'};
   }
   if(has(sender,GOVERNMENT_SENDER)&&has(content,GOVERNMENT_ACTION)){
     return {intent:'life_admin',category:'government',confidence:0.9,reason:'government_admin'};
