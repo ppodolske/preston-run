@@ -1,7 +1,7 @@
 # preston.ai Connected Intelligence Design
 
 Date: 2026-09-15  
-Status: Proposed for review  
+Status: Proposed for review — approved architecture with Amendment 1 applied  
 Repository: `ppodolske/preston-run`  
 Production branch: `build/preston-ai-v0.11.0`  
 Scope: Umbrella architecture for the v0.15-v0.20 programme
@@ -10,11 +10,13 @@ Scope: Umbrella architecture for the v0.15-v0.20 programme
 
 This design evolves preston.ai from a collection of useful personal dashboards and domain-specific automations into a connected personal operating system.
 
-The programme adds the following approved capabilities:
+The approved programme adds:
 
 - Universal Personal Search;
 - Personal Knowledge Graph / entity linking;
 - Google Drive-backed Documents;
+- whole-Drive discovery/backfill for user-owned My Drive content;
+- Drive organisation intelligence and proposed reorganisation plans;
 - Gmail attachment filing into Documents;
 - automatic document extraction and linking;
 - communications intelligence;
@@ -25,7 +27,7 @@ The programme adds the following approved capabilities:
 - explicit action approval, audit and progressive automation;
 - Trip Readiness and Pre-Trip Briefings;
 - suggested Trip archival;
-- a more action-oriented Today page;
+- one unified Today dashboard that includes recovery/training intelligence;
 - Daily Pulse updates throughout the day;
 - dashboard quick actions;
 - Global and context-aware Quick Add;
@@ -48,13 +50,38 @@ The shared layer consists of five concepts:
 
 The result should feel like one coherent system rather than a set of disconnected features.
 
-This is an umbrella design, not a single-release implementation specification. Each major phase will receive its own detailed implementation plan and release gate before code is merged or deployed.
+This is an umbrella design, not a single-release implementation specification. Each implementation phase must receive its own focused Superpowers design/spec, implementation plan, release gate and explicit merge/deploy decision.
 
-## 2. Current-state principles to preserve
+## 2. Amendments incorporated
 
-The existing architecture already contains useful canonical boundaries that this programme must preserve.
+### 2.1 Amendment 1 — unified Today
 
-### 2.1 Existing domain objects remain authoritative
+The previous design kept Morning Digest visually separate from Today. That decision is superseded.
+
+There will be one user-facing home dashboard: **Today**.
+
+Existing Morning Digest fitness/recovery intelligence remains valuable but becomes the **Recovery & Training** section within Today. The separate Morning Digest dashboard/card experience is retired as a standalone morning destination.
+
+Daily Pulse remains an internal intelligence/snapshot concept used to refresh Today throughout the day. It is not a separate page the user must check.
+
+### 2.2 Amendment 1 — whole-Drive discovery
+
+The previous design limited Drive access to `drive.file` and explicitly excluded whole-Drive crawling. That decision is superseded.
+
+preston.ai will be designed to inventory and read the user's existing **user-owned My Drive** content for document backfill, search, relationship discovery and organisation recommendations.
+
+The initial permission model is:
+
+- `drive.readonly` for whole-Drive discovery/read access;
+- `drive.file` for files created by preston.ai or explicitly selected/granted to preston.ai for write operations.
+
+Broad Drive read access must not imply broad Drive write authority.
+
+Whole-Drive reorganisation is **proposal-first**. preston.ai may analyse and recommend moves, renames, folder consolidation and duplicate handling, but must not silently reorganise the user's Drive.
+
+## 3. Current-state principles to preserve
+
+### 3.1 Existing domain objects remain authoritative
 
 The current Trip / Booking / Booking Leg / Life Admin / Gmail-source split established in v0.13-v0.14 remains valid.
 
@@ -69,63 +96,63 @@ Examples:
 - **Person** = canonical person record;
 - **Gmail source** = provenance/evidence rather than the canonical business object.
 
-The new intelligence layer must point to these objects. It must not create parallel versions of them.
+The intelligence layer points to these objects. It does not create parallel versions.
 
-### 2.2 Manual authority remains protected
+### 3.2 Manual authority remains protected
 
-Where an automated source and a manual value conflict, a manually confirmed value remains authoritative unless the user explicitly changes that rule.
+Where an automated source and a manually confirmed value conflict, the manual value remains authoritative unless the user explicitly changes it.
 
-The same principle will apply to:
+This applies to:
 
 - entity links;
 - document metadata;
+- Drive organisation decisions;
 - commitment state;
 - project relationships;
 - reminder choices;
 - Agent-created or Agent-proposed changes.
 
-### 2.3 Gmail remains read-only in the initial Agent programme
+### 3.3 Gmail remains read-only in the initial Agent programme
 
 The current Gmail integration uses `gmail.readonly`.
 
 This programme does not require Gmail sending, labelling, archiving or mailbox modification in its initial phases.
 
-If future Agent work adds email drafting or sending, that must be a separate permission expansion with its own design and explicit re-authorization.
+Future Gmail drafting/sending requires a separate permission expansion and explicit re-authorization.
 
-### 2.4 Morning Digest remains distinct from Today
+### 3.4 One home surface
 
-Morning Digest answers primarily:
+Today answers all three questions:
 
 > How am I doing?
 
-It focuses on fitness, recovery and related context.
+> What matters now?
 
-Today answers:
+> What has changed since I last looked?
 
-> What matters now and what do I need to do?
+Recovery/training, tasks, calendar, Life Admin, commitments, travel and system health are coordinated within that single surface.
 
-The Daily Pulse evolves Today. It does not replace or absorb Morning Digest.
-
-## 3. Goals
-
-### 3.1 Product goals
+## 4. Product goals
 
 The completed system should allow the user to:
 
 - find information across preston.ai from one search surface;
 - understand how people, trips, projects, documents, email threads and records relate;
 - capture goals and projects without creating a second task manager;
-- store important files in the user’s own Google Drive while preston.ai understands and indexes them;
+- use Google Drive as the canonical binary document store;
+- understand and backfill useful information from existing user-owned Drive files;
+- receive practical recommendations for simplifying and organising Drive without automatic broad mutation;
 - detect commitments and follow-ups from Gmail at thread level;
 - review uncertain automation in one shared place;
-- use Today as an action centre that changes meaningfully throughout the day;
+- use Today as the one dashboard for recovery, planning and action;
+- have Today evolve meaningfully through the day as data changes;
 - receive useful pre-trip readiness and briefing intelligence;
 - keep a durable historical record of meaningful outcomes and evidence;
 - allow an Agent to propose and eventually perform well-defined actions without unrestricted access to application internals;
-- see where every imported or inferred item came from;
+- see where imported or inferred information came from;
 - understand whether source integrations are current and healthy.
 
-### 3.2 Architecture goals
+## 5. Architecture goals
 
 The design must:
 
@@ -133,36 +160,23 @@ The design must:
 - avoid unnecessary new infrastructure;
 - preserve existing canonical tables;
 - provide common primitives for relationships, provenance, search, review and actions;
-- allow features to be implemented in phases;
-- remain understandable and testable at the module level;
+- allow features to ship in independent phases;
+- remain understandable and testable at module level;
 - default to safe, reversible behaviour;
-- make automation confidence and authority explicit;
+- make automation confidence, risk and authority explicit;
 - avoid silent destructive actions;
-- remain appropriate for a single-user private system while preserving proper ownership/RLS patterns.
+- treat Drive crawling as bounded, resumable and checkpointed work rather than one unbounded job;
+- remain appropriate for a single-user private system while preserving ownership/RLS patterns.
 
-### 3.3 User-experience goals
-
-The system should feel increasingly connected without becoming cluttered.
-
-Examples:
-
-- a Queenstown Trip can show linked bookings, documents, tasks, projects and readiness;
-- a PR Project can show documents, Gmail correspondence, Life Admin and milestones;
-- Universal Search can surface all of those without the user needing to know which table they came from;
-- Today can show an actionable summary and explain what changed since the morning;
-- uncertain classification or linking appears in Review Inbox rather than being silently accepted;
-- provenance can be inspected without overwhelming every screen.
-
-## 4. Non-goals
+## 6. Non-goals
 
 This programme will not initially add:
 
-- a graph database such as Neo4j;
+- Neo4j or another graph database;
 - Elasticsearch or OpenSearch;
 - Pinecone or another external vector database;
 - Kafka or a separate event-stream platform;
 - a separate document-storage server;
-- whole-Drive crawling;
 - autonomous Gmail sending;
 - autonomous financial transactions or payments;
 - unrestricted LLM database access;
@@ -170,15 +184,14 @@ This programme will not initially add:
 - a replacement for Google Drive;
 - a replacement for Gmail;
 - a second task-management model inside Projects;
-- automatic creation of historical Records for every minor event;
+- automatic creation of Records for every minor event;
 - automatic Trip archival without user approval;
+- automatic broad Drive reorganisation;
+- automatic deletion of Drive files;
+- crawling Shared With Me or shared drives as part of the initial Drive backfill;
 - Level-4 autonomous actions at launch.
 
-## 5. Chosen architecture
-
-### 5.1 Overview
-
-The architecture is:
+## 7. Chosen architecture
 
 ```text
 Existing canonical domains
@@ -210,43 +223,20 @@ Action Audit
 User-facing intelligence
 ────────────────────────────────────
 Universal Search
-Today / Daily Pulse
+Today
 Review Inbox
 Trip Readiness
 Pre-Trip Briefings
+Drive Organisation Review
 Agent
 Records
 ```
 
-No canonical domain is replaced by the entity registry. The entity registry is a stable indirection layer used by cross-domain systems.
+No canonical domain is replaced by the entity registry.
 
-### 5.2 Why this approach
-
-The selected features share the same dependency pattern:
-
-- Search needs stable entity identity;
-- Projects need links to Tasks, Documents, People and Trips;
-- Documents need links and provenance;
-- Communications need links and review;
-- the Agent needs links, provenance, actions and audit;
-- Records need links to historical evidence;
-- Today needs a common way to aggregate actionable items.
-
-Building those independently would duplicate relationship and provenance logic.
-
-## 6. Entity Registry
-
-### 6.1 Purpose
+## 8. Entity Registry
 
 `entity_registry` provides a generic identity for a canonical record.
-
-It answers:
-
-> Which preston.ai object is this?
-
-It does not store the object’s business data.
-
-### 6.2 Proposed schema
 
 ```text
 entity_registry
@@ -263,9 +253,9 @@ Constraints:
 - unique `(user_id, entity_type, source_record_id)`;
 - RLS by `user_id`;
 - no nullable ownership;
-- no business fields duplicated from the canonical table.
+- no business fields duplicated from canonical tables.
 
-Initial supported `entity_type` values:
+Initial entity types:
 
 - `person`
 - `trip`
@@ -279,22 +269,9 @@ Initial supported `entity_type` values:
 - `record`
 - `communication_thread`
 
-Additional types may be added only when they have a stable canonical identity.
+Entity creation may be eager or lazy by domain. Deletion/tombstone behaviour is resolved in the relevant phase spec.
 
-### 6.3 Registry lifecycle
-
-A registry row may be created:
-
-- at canonical object creation time; or
-- lazily when the object first participates in a shared feature.
-
-Deleting a canonical object must not leave a live entity reference that pretends the object still exists. The implementation phase must define either cascading cleanup or tombstone behaviour per domain.
-
-For historical integrity, Records and audit logs may retain textual snapshots even if a referenced entity later disappears.
-
-## 7. Entity Links
-
-### 7.1 Purpose
+## 9. Entity Links
 
 `entity_links` stores cross-domain relationships.
 
@@ -311,7 +288,7 @@ Record       ─supported_by─→ Document
 Milestone    ─belongs_to───→ Project
 ```
 
-### 7.2 Proposed schema
+Proposed schema:
 
 ```text
 entity_links
@@ -328,55 +305,22 @@ entity_links
 - updated_at timestamptz not null
 ```
 
-Suggested values:
-
-`authority`:
-
-- `manual`
-- `source`
-- `inferred`
-
-`status`:
-
-- `proposed`
-- `confirmed`
-- `rejected`
-
-`created_by`:
-
-- `user`
-- `gmail`
-- `document_processor`
-- `system`
-- `agent`
-
-### 7.3 Link authority
-
 Rules:
 
 - manual links are immediately confirmed;
-- source-explicit links may auto-confirm when deterministic;
+- deterministic source-explicit links may auto-confirm;
 - inferred links follow confidence/review policy;
 - rejected links must not silently reappear from identical evidence;
-- a confirmed manual correction wins over later inference.
+- confirmed manual corrections win over later inference;
+- links are directional at storage level.
 
-### 7.4 No forced symmetry
-
-Links are directional at storage level.
-
-The presentation layer may display natural inverse wording, but the database must not create duplicate inverse rows unless a specific use case requires them.
-
-## 8. Provenance
-
-### 8.1 Principle
+## 10. Provenance
 
 Any imported, inferred or Agent-created object should be able to answer:
 
 > Where did this come from?
 
-### 8.2 Provenance sources
-
-Initial source types include:
+Initial source types:
 
 - `manual`
 - `gmail`
@@ -386,7 +330,7 @@ Initial source types include:
 - `system_inference`
 - `agent_action`
 
-### 8.3 Proposed generic provenance table
+Generic bridge:
 
 ```text
 entity_sources
@@ -401,35 +345,11 @@ entity_sources
 - last_seen_at timestamptz not null
 ```
 
-Existing domain-specific provenance tables remain valid and authoritative during migration.
-
-The generic layer should bridge to them rather than forcing an immediate rewrite of all existing Gmail source relationships.
-
-### 8.4 Field-level provenance
+Existing domain-specific provenance remains valid. The generic layer bridges to it instead of forcing immediate rewrites.
 
 Field-level provenance is required only where automated extraction materially changes structured data.
 
-New intelligence-heavy entities such as Documents and Communications may store a compact `field_provenance` JSON structure.
-
-Existing domain tables should not be retrofitted wholesale unless implementation reveals a specific need.
-
-### 8.5 User interface
-
-Common surfaces should support a compact source indicator such as:
-
-- Gmail;
-- Drive;
-- Manual;
-- Calendar;
-- Agent.
-
-Detailed source evidence is available on demand rather than occupying primary card space.
-
-## 9. Universal Personal Search
-
-### 9.1 Scope
-
-Universal Search covers canonical preston.ai entities, not arbitrary external systems.
+## 11. Universal Personal Search
 
 Initial domains:
 
@@ -445,9 +365,7 @@ Initial domains:
 - Records;
 - Communication Threads.
 
-### 9.2 Search index
-
-Proposed table:
+Proposed index:
 
 ```text
 search_documents
@@ -465,64 +383,30 @@ search_documents
 - source_updated_at timestamptz null
 ```
 
-Constraints:
+Initial ranking:
 
-- one active search document per entity unless an implementation phase proves chunking is necessary;
-- RLS by `user_id`;
-- index `search_vector`;
-- enable `pg_trgm` for fuzzy matching.
-
-### 9.3 Ranking strategy
-
-Initial search is deterministic:
-
-1. exact title / reference matches;
+1. exact title/reference matches;
 2. full-text search;
 3. fuzzy/trigram match;
-4. date/context boosts where relevant.
+4. date/context boosts.
 
-Semantic embeddings are a later enhancement, not an initial dependency.
+Enable `pg_trgm` for fuzzy matching. Semantic embeddings are optional later; if added, use pgvector in Supabase rather than a new vector service.
 
-If semantic search is later added, enable pgvector in Supabase and keep embeddings inside Postgres rather than introducing a separate vector service.
+Search indexing is derived, idempotent and rebuildable from canonical data.
 
-### 9.4 Search result presentation
+## 12. Goals, Projects and Milestones
 
-Results display:
+Definitions:
 
-- entity type;
-- title;
-- concise matching context;
-- relevant date;
-- relationship context where helpful;
-- source/provenance indicator.
-
-Search results link to canonical object pages.
-
-### 9.5 Search indexing
-
-Search indexing must be idempotent.
-
-Canonical domain mutations enqueue or trigger re-indexing of the affected entity.
-
-A repair/rebuild command must be available so the search index can be regenerated from canonical data rather than treated as authoritative storage.
-
-## 10. Goals, Projects and Milestones
-
-### 10.1 Definitions
-
-**Goal** = a desired longer-term outcome.
-
-**Project** = a finite body of work undertaken to achieve an outcome.
-
-**Milestone** = a meaningful checkpoint within a Project.
-
-**Task** = a next action.
-
-**Life Admin** = an obligation, deadline, bill, appointment or administrative item.
+- **Goal** = desired longer-term outcome;
+- **Project** = finite body of work toward an outcome;
+- **Milestone** = meaningful project checkpoint;
+- **Task** = next action;
+- **Life Admin** = obligation/deadline/bill/appointment/administrative item.
 
 Projects do not introduce a second task system.
 
-### 10.2 Proposed Goals schema
+### 12.1 Goals
 
 ```text
 goals
@@ -538,14 +422,9 @@ goals
 - updated_at timestamptz not null
 ```
 
-Suggested statuses:
+Suggested statuses: `active`, `paused`, `completed`, `abandoned`.
 
-- `active`
-- `paused`
-- `completed`
-- `abandoned`
-
-### 10.3 Proposed Projects schema
+### 12.2 Projects
 
 ```text
 projects
@@ -563,15 +442,9 @@ projects
 - updated_at timestamptz not null
 ```
 
-Suggested statuses:
+Suggested statuses: `planned`, `active`, `waiting`, `completed`, `cancelled`.
 
-- `planned`
-- `active`
-- `waiting`
-- `completed`
-- `cancelled`
-
-### 10.4 Proposed Milestones schema
+### 12.3 Milestones
 
 ```text
 project_milestones
@@ -587,79 +460,88 @@ project_milestones
 - updated_at timestamptz not null
 ```
 
-### 10.5 Project relationships
+Tasks, Life Admin, Documents, People, Trips, Records and Communication Threads link to Projects through the entity-link layer unless an existing canonical FK is already clearly appropriate.
 
-Tasks, Life Admin, Documents, People, Trips, Records and Communication Threads link to Projects through the entity-link layer unless an existing canonical foreign key is already clearly appropriate.
+## 13. Documents and Google Drive
 
-Do not add a new bespoke `project_id` column to every table by default.
+### 13.1 Storage split
 
-### 10.6 Project pages
+- **Google Drive** = canonical binary file store;
+- **Supabase** = document metadata, extracted text, relationships, processing state and search representation;
+- **Railway** = ingestion/processing workers;
+- **preston.ai** = UI, intelligence, review and actions.
 
-A Project page should show:
+Drive file IDs are authoritative references; folder paths are not.
 
-- status and target date;
-- Goal if any;
-- milestones;
-- open Tasks;
-- Life Admin;
-- linked Documents;
-- linked Communication Threads/commitments;
-- linked Trips/People where relevant;
-- activity/provenance summary.
+### 13.2 OAuth permission model
 
-## 11. Documents and Google Drive
+The approved model intentionally uses two Drive capabilities:
 
-### 11.1 Storage split
+- `drive.readonly` — inventory, read and download files across the authorised Drive corpus;
+- `drive.file` — create/manage files preston.ai creates or files explicitly selected/shared for app write access.
 
-Google Drive is the canonical binary file store.
+`drive.readonly` is a Google restricted scope. The v0.17 phase must include a release gate covering the appropriate OAuth verification/security-assessment path before production whole-Drive crawling is enabled.
 
-Supabase is the canonical store for document metadata, extracted text, relationships, processing state and search representation.
+Drive OAuth tokens must be encrypted at rest using the same or stronger pattern as Gmail credentials.
 
-Railway runs ingestion and processing.
+Drive authorization remains application-layer isolated from Gmail even when both use the same Google account.
 
-### 11.2 Google Drive permission model
+### 13.3 Initial crawl corpus
 
-Initial Drive authorization uses the narrow `drive.file` scope.
+Initial Drive discovery includes:
 
-preston.ai may access:
+- files and folders owned by the user in My Drive;
+- Google-native files and ordinary uploaded files where readable;
+- files regardless of whether they live inside a preston.ai-created folder.
 
-- files it creates; and
-- files the user explicitly selects for the app.
+Initial crawl excludes by default:
 
-The system does not crawl or index the user’s entire Drive.
+- Trash;
+- hidden app data;
+- Shared With Me content owned by other people;
+- shared drives;
+- content inaccessible under the authorised account.
 
-A future whole-Drive permission expansion would require a separate design and explicit approval.
+Those exclusions may be expanded later through a separate design/configuration decision.
 
-### 11.3 Drive folder
+### 13.4 Drive inventory
 
-preston.ai creates or uses a visible top-level folder such as:
+The first pass is metadata-first and does not immediately send every file to extraction/AI processing.
+
+Inventory captures where available:
 
 ```text
-preston.ai Documents/
+drive_file_id
+name
+mime_type
+parents / folder structure
+created_time
+modified_time
+size
+ownership
+shortcut state
+trashed state
+capabilities relevant to later actions
 ```
 
-Optional broad category folders may include:
+The inventory is resumable and checkpointed. It must not be implemented as one unbounded Railway job.
 
-- Identity;
-- Immigration;
-- Insurance;
-- Travel;
-- Financial;
-- Home & Assets;
-- Health;
-- Other.
+### 13.5 Content backfill
 
-The Drive folder hierarchy is not authoritative metadata.
+After inventory, eligible files are progressively processed for useful personal knowledge.
 
-A file may move between folders without changing its preston.ai identity because the stable Drive file ID is authoritative.
+Priority may be based on:
 
-### 11.4 Google Picker
+- likely document type;
+- recency;
+- location/folder context;
+- known entities such as Trips/Projects/People;
+- filename signals;
+- user-selected folders or batches.
 
-The user may add an existing Drive file through Google Picker.
+Existing Drive files are not copied merely to make them preston.ai Documents. The Document record points to the existing Drive file ID.
 
-Selecting a file grants preston.ai access to that file under the narrow permission model and starts normal document processing.
-
-### 11.5 Proposed Documents schema
+### 13.6 Documents schema
 
 ```text
 documents
@@ -688,120 +570,159 @@ documents
 
 Suggested processing statuses:
 
+- `discovered`
 - `pending`
 - `processing`
 - `ready`
 - `needs_review`
 - `failed`
 - `unavailable`
+- `excluded`
 
-### 11.6 Document processing
+### 13.7 Document processing
 
-Processing attempts to extract:
+Processing may extract:
 
 - title;
 - document type;
 - issuer/provider;
 - important dates;
-- reference/policy numbers where useful;
+- reference/policy numbers;
 - summary;
 - searchable text;
 - potential links to existing entities.
 
-Digital PDFs should use text extraction before OCR.
+Digital text extraction is preferred before OCR. OCR/multimodal processing is used only when necessary.
 
-OCR or multimodal extraction is used only when necessary.
+Original Drive files remain unmodified during extraction.
 
-The extraction pipeline must preserve the original Drive file unmodified.
+### 13.8 File lifecycle
 
-### 11.7 Document deletion semantics
+Two separate concepts remain required:
 
-Two distinct user actions are required:
+1. **Remove from preston.ai** — remove/archive preston.ai metadata/index relationships while leaving the Drive file intact;
+2. **Delete Drive file** — destructive external action requiring explicit confirmation and not included in the initial Agent action set.
 
-1. **Remove from preston.ai** — removes or archives preston.ai metadata/index relationships while leaving the Drive file intact;
-2. **Delete Drive file** — a separate destructive action requiring explicit confirmation.
+If a file moves, identity persists through the Drive file ID.
 
-The Agent must not delete Drive files in the initial Agent release.
+If a file disappears or access is revoked, preston.ai marks the Document unavailable rather than deleting history silently.
 
-If a Drive file is moved, normal operation continues through its file ID.
+## 14. Drive Organisation Intelligence
 
-If a file is deleted externally or access is revoked, preston.ai marks the Document `unavailable` rather than deleting historical metadata silently.
+### 14.1 Purpose
 
-## 12. Gmail Attachment → Documents
+Drive Organisation Intelligence analyses the existing Drive structure and recommends ways to make the document library more coherent and efficient.
 
-### 12.1 Purpose
+It may identify:
+
+- duplicate or near-duplicate files;
+- inconsistent naming conventions;
+- files spread across redundant folders;
+- overly deep folder hierarchies;
+- root-folder clutter;
+- empty or stale folders;
+- outdated duplicate copies;
+- documents that belong with an existing Project, Trip or Record;
+- parallel categories such as `Travel`, `Trips`, `Holiday` that could be consolidated;
+- folder structures that conflict with preston.ai's actual entity relationships.
+
+### 14.2 Recommendation model
+
+A Drive Organisation Review presents current structure, proposed structure and concrete proposed actions.
+
+Example:
+
+```text
+Current
+Travel/
+Trips/
+Holidays/
+NZ/
+Queenstown 2026/
+Bookings/
+
+Suggested
+Travel/
+  2026/
+    Queenstown/
+      Bookings/
+      Insurance/
+      Activities/
+
+Proposed
+- move 17 files
+- rename 4 files
+- merge 3 redundant folders
+- flag 2 possible duplicates
+- delete 0 files
+```
+
+### 14.3 Safety model
+
+At initial launch:
+
+- whole-Drive analysis is read-only;
+- recommendations may be accepted/rejected individually or as a plan;
+- accepting a recommendation does not automatically imply preston.ai has permission to execute it;
+- files/folders are never deleted automatically;
+- broad move/rename execution requires a separately designed write-authority path.
+
+Where `drive.file` already provides write access to a specific app-managed file, preston.ai may eventually execute approved file-local actions through the Agent, but broad reorganisation across arbitrary existing files is out of scope until a later write-permission design is explicitly approved.
+
+### 14.4 Folder hierarchy is not canonical truth
+
+preston.ai entity links remain authoritative for semantic relationships.
+
+Drive folders are useful for human organisation, but the system must not infer that a file stopped relating to a Project/Trip merely because the user moved it to another folder.
+
+## 15. Gmail Attachment → Documents
 
 Important Gmail attachments can become first-class Documents without manual download/re-upload.
 
-### 12.2 Flow
+Flow:
 
 ```text
 Gmail attachment discovered
         ↓
 Relevance classification
         ↓
-Attachment content fetched when needed
+Attachment fetched when needed
         ↓
 Document extraction
         ↓
-Potential entity links identified
+Potential entity links
         ↓
-Confidence policy
-  high-confidence safe proposal / review
+Confidence/review policy
         ↓
 File created in Google Drive
         ↓
-Document row created
+Document row + Gmail provenance
         ↓
-Provenance linked to Gmail attachment
+Entity links
         ↓
-Entity links confirmed/proposed
-        ↓
-Search index updated
+Search index
 ```
 
-### 12.3 Idempotency
+The ingestion path is idempotent. Dedupe uses Gmail source/attachment identity, Drive file identity and checksum as supporting evidence.
 
-The system must not create duplicate Documents when the same Gmail attachment is processed repeatedly.
+Existing historical Gmail attachments are not copied into Drive en masse without a bounded backfill plan.
 
-Primary dedupe signals:
+## 16. Communications Intelligence
 
-- Gmail attachment/source record identity;
-- Drive file identity after creation;
-- checksum as a supporting signal.
+Message-level facts are evidence. The thread is the canonical communication object.
 
-### 12.4 Review behaviour
-
-Examples likely to require little user intervention:
-
-- clearly identified travel insurance certificate linked to an existing Trip;
-- booking receipt already linked to a canonical Booking;
-- explicit government letter linked to an existing Project.
-
-Ambiguous attachments go to Review Inbox before filing/linking decisions are treated as authoritative.
-
-## 13. Communications Intelligence
-
-### 13.1 Scope
-
-Communications Intelligence extends Gmail processing beyond travel and Life Admin extraction.
-
-It aims to identify:
+The system aims to identify:
 
 - requests for action;
 - user commitments;
 - commitments made by others;
 - deadlines;
 - expected follow-ups;
-- waiting-on direction;
+- waiting direction;
 - resolution/cancellation;
 - relevant People, Trips and Projects.
 
-### 13.2 Thread-level model
-
-Message-level facts are evidence. The thread is the canonical communication object.
-
-Proposed schema:
+Proposed thread model:
 
 ```text
 communication_threads
@@ -821,53 +742,17 @@ communication_threads
 - updated_at timestamptz not null
 ```
 
-Suggested `thread_status` values:
+Suggested thread statuses: `active`, `resolved`, `ignored`.
 
-- `active`
-- `resolved`
-- `ignored`
+Suggested waiting direction: `none`, `waiting_on_me`, `waiting_on_other`, `unclear`.
 
-Suggested `waiting_direction` values:
+Raw Gmail content is fetched when processing requires it. preston.ai stores structured facts, summaries, commitments, provenance and search-safe derived text rather than blindly duplicating the entire mailbox.
 
-- `none`
-- `waiting_on_me`
-- `waiting_on_other`
-- `unclear`
+Later messages may fulfil, cancel or supersede older commitments and reverse waiting direction.
 
-### 13.3 Raw Gmail content strategy
+## 17. Commitment Detection
 
-The system will use a hybrid approach.
-
-Raw message content is fetched from Gmail when processing requires it.
-
-preston.ai stores:
-
-- source metadata;
-- structured extracted facts;
-- summaries;
-- commitments;
-- provenance;
-- search-safe derived text where needed.
-
-It does not blindly persist a full duplicate of the entire Gmail mailbox.
-
-### 13.4 Thread updates
-
-A new message causes the thread intelligence to be recomputed or incrementally updated.
-
-Later messages may:
-
-- fulfil a commitment;
-- cancel a commitment;
-- change a deadline;
-- reverse waiting direction;
-- resolve the thread.
-
-The system must not treat an old message-level commitment as current when later thread evidence clearly supersedes it.
-
-## 14. Commitment Detection
-
-### 14.1 Proposed schema
+Proposed model:
 
 ```text
 communication_commitments
@@ -888,54 +773,15 @@ communication_commitments
 - resolved_at timestamptz null
 ```
 
-Suggested statuses:
+Suggested statuses: `proposed`, `open`, `completed`, `cancelled`, `superseded`.
 
-- `proposed`
-- `open`
-- `completed`
-- `cancelled`
-- `superseded`
+A detected commitment is not automatically a Task or Life Admin item. It may propose one when useful.
 
-### 14.2 Behaviour
+## 18. Shared Review Inbox
 
-Examples:
+Review Inbox is shared across intelligent subsystems, not Gmail-only.
 
-> “I’ll send you the signed form Friday.”
-
-may produce:
-
-- commitment owner = user;
-- due date = Friday when resolvable;
-- waiting direction = waiting on me.
-
-> “We have submitted your application. You should hear back within five business days.”
-
-may produce:
-
-- commitment/expectation = external party;
-- waiting direction = waiting on other;
-- expected response window;
-- suggested follow-up if overdue.
-
-### 14.3 Relationship to Tasks and Life Admin
-
-A detected commitment is not automatically a Task or Life Admin item.
-
-It may propose one when that representation is useful.
-
-This avoids duplicating every conversational promise into the task system.
-
-## 15. Shared Review Inbox
-
-### 15.1 Purpose
-
-Review Inbox is a single place for uncertain automation across domains.
-
-It is not Gmail-only.
-
-### 15.2 Reviewable proposal types
-
-Initial types include:
+Initial proposal types:
 
 - Gmail classification;
 - commitment creation/update;
@@ -943,11 +789,12 @@ Initial types include:
 - document filing;
 - document/entity linking;
 - entity linking;
+- Drive organisation recommendations;
 - trip linking;
 - project linking;
-- Agent action proposals where additional user judgement is required.
+- Agent action proposals needing judgement.
 
-### 15.3 Proposed schema
+Proposed model:
 
 ```text
 review_items
@@ -966,23 +813,13 @@ review_items
 - resolution jsonb null
 ```
 
-Suggested states:
+Suggested states: `pending`, `accepted`, `rejected`, `deferred`, `expired`.
 
-- `pending`
-- `accepted`
-- `rejected`
-- `deferred`
-- `expired`
-
-### 15.4 Confidence policy
-
-Confidence is not the only factor. Risk matters too.
-
-Policy concept:
+Policy:
 
 ```text
 High confidence + low-risk internal enrichment
-→ may apply automatically where policy allows
+→ may apply automatically where policy explicitly allows
 
 High confidence + material change
 → prepare and ask
@@ -994,69 +831,117 @@ Destructive or external action
 → explicit confirmation
 ```
 
-Manual review outcomes become authoritative context for future identical evidence.
+## 19. Today — unified home dashboard
 
-## 16. Today and Daily Pulse
+### 19.1 Product definition
 
-### 16.1 Today purpose
+Today is the one primary home dashboard.
 
-Today becomes the primary action-oriented home surface.
+There is no separate Morning Digest dashboard the user must check.
 
-It answers:
+Today combines:
 
-> What matters now?
+- Recovery & Training;
+- tasks and Life Admin;
+- open commitments and Waiting;
+- calendar and appointments;
+- Trips and travel readiness where relevant;
+- Goals/Projects needing attention;
+- Review Inbox items where important;
+- system health when relevant;
+- changes since the previous pulse.
 
-Morning Digest remains a separate recovery/fitness component.
+### 19.2 Morning view
 
-### 16.2 Daily Pulse
+The morning Today view should include the existing Morning Digest intelligence inside a **Recovery & Training** section.
 
-Today should meaningfully refresh throughout the day.
+Representative structure:
 
-Initial pulse windows align with existing source-refresh cadence:
+```text
+TODAY
+Good morning
 
-- **Morning** — after Gmail, Calendar and fitness morning refreshes;
-- **Midday** — after the midday Gmail refresh;
-- **Evening** — after the early-evening Gmail refresh;
-- **Late** — after the late Gmail refresh, primarily to prepare tomorrow context.
+Recovery & Training
+- sleep/recovery
+- planned workout
+- key fitness insight
 
-The exact cron/service mechanism is an implementation detail, but the product behaviour is fixed: Today reflects new information during the day rather than remaining a static morning digest.
+Needs your attention
+- tasks
+- Life Admin
+- commitments
+- Waiting
 
-### 16.3 Pulse content
+Your day
+- calendar
+- trips
+- important events
 
-A pulse may include:
+Projects & Goals
+- relevant milestones / next actions
 
-- due/overdue items;
-- open commitments;
-- Waiting items;
-- calendar changes;
-- Trip readiness changes;
-- newly important Gmail-derived information;
-- upcoming reminders;
-- system/integration health only when relevant;
-- tomorrow preview in evening/late windows.
+System health
+- compact status only when useful
+```
 
-### 16.4 Change awareness
+### 19.3 Daily Pulse
 
-Later pulses should emphasize what changed since the previous pulse.
+Daily Pulse is an internal mechanism that updates Today as source data changes.
 
-Examples:
+Initial windows align with existing source-refresh cadence:
+
+- **Morning** — after morning Gmail, Calendar and fitness refreshes;
+- **Midday** — after midday source refresh;
+- **Afternoon/evening** — after early-evening source refresh;
+- **Late** — primarily to prepare tomorrow context.
+
+Exact cron/service wiring is deferred to the v0.16 phase spec.
+
+### 19.4 Time-of-day behaviour
+
+Morning emphasises:
+
+- recovery/training;
+- today's plan;
+- overnight changes;
+- first priorities.
+
+Midday emphasises:
+
+- what changed since morning;
+- what is complete;
+- what still matters;
+- new commitments/calendar changes.
+
+Afternoon/evening emphasises:
+
+- remaining actions;
+- waiting/follow-ups;
+- preparation for tomorrow;
+- significant changes since midday.
+
+Late view emphasises tomorrow only when useful rather than keeping stale morning content prominent.
+
+### 19.5 Change awareness
+
+Later pulses should explain meaningful deltas, for example:
 
 - “Two things changed since this morning.”
 - “Your 3pm appointment moved to 4pm.”
-- “The Queenstown insurance document was filed and Trip readiness is now complete.”
+- “The Queenstown insurance document was found in Drive and linked to the Trip.”
 - “You are still waiting on one reply.”
 
-### 16.5 Notification restraint
+### 19.6 Notification restraint
 
-The Today page may refresh frequently without sending a push notification every time.
+Today may update frequently without producing a push notification each time.
 
-Push notifications are reserved for meaningful changes or items requiring timely attention.
+Push notifications are reserved for meaningful, time-sensitive changes or items requiring attention.
 
-## 17. Dashboard Quick Actions
+Morning notification opens Today rather than a separate digest page.
 
-Today cards should expose context-appropriate direct actions.
+## 20. Dashboard Quick Actions
 
-Examples:
+Today cards expose context-appropriate actions such as:
 
 - Complete;
 - Snooze;
@@ -1067,31 +952,22 @@ Examples:
 - Archive Trip suggestion;
 - confirm/reject proposed link.
 
-Actions must use the same validated application services used elsewhere, not custom dashboard-only mutations.
+Actions use canonical application services rather than dashboard-specific mutation logic.
 
-## 18. Waiting as a first-class view
+## 21. Waiting as a first-class view
 
-The existing Life Admin `waiting` status becomes first-class in navigation/filtering.
-
-Over time, Waiting may aggregate:
+Waiting may aggregate:
 
 - Life Admin in `waiting`;
 - Projects in `waiting`;
-- communication commitments where `waiting_on_other`;
-- Agent proposals awaiting external conditions.
+- commitments with `waiting_on_other`;
+- Agent proposals waiting on external conditions.
 
-The UI should distinguish:
+The UI distinguishes **waiting on me** from **waiting on someone/something else**.
 
-- **waiting on me**;
-- **waiting on someone/something else**.
+## 22. Global and Context-Aware Quick Add
 
-The underlying domain state remains authoritative.
-
-## 19. Global and Context-Aware Quick Add
-
-### 19.1 Global Quick Add
-
-A persistent `+` control may create:
+Global Quick Add may create:
 
 - Task;
 - Life Admin;
@@ -1103,22 +979,11 @@ A persistent `+` control may create:
 - Document;
 - Record.
 
-### 19.2 Context-aware behaviour
+When opened from a canonical entity page it pre-populates the relationship, but the user can change/remove the proposed context before saving.
 
-When opened from a canonical entity page, Quick Add pre-populates that relationship.
+## 23. Persistent product navigation
 
-Examples:
-
-- `+ Task` on a Project page links the Task to the Project;
-- `+ Document` on a Trip page proposes/creates the Trip link;
-- `+ Life Admin` on a Person page carries the Person relationship;
-- `+ Milestone` on a Project page automatically sets the Project.
-
-The user can remove/change the proposed context before saving.
-
-## 20. Persistent product navigation
-
-The application shell should move toward a stable structure such as:
+Target shell:
 
 ```text
 Today
@@ -1131,23 +996,13 @@ Documents
 Records
 ```
 
-Universal Search and Quick Add are global controls rather than ordinary low-priority nav items.
+Search and Quick Add are global controls rather than low-priority nav items.
 
-Goals may live within Projects rather than requiring a permanent top-level nav destination.
+Goals may live within Projects. Review Inbox appears as a contextual/global inbox indicator when pending items exist.
 
-Review Inbox appears as a contextual/global inbox indicator when pending items exist.
+## 24. Trip Readiness
 
-Lower-frequency administration remains under Settings/More.
-
-## 21. Trip Readiness
-
-### 21.1 Purpose
-
-Trip Readiness determines whether an upcoming Trip appears complete enough to proceed.
-
-It is the intelligence engine beneath Pre-Trip Briefings.
-
-### 21.2 Readiness categories
+Trip Readiness is the intelligence engine beneath Pre-Trip Briefings.
 
 Initial checks may include:
 
@@ -1158,89 +1013,57 @@ Initial checks may include:
 - open Trip tasks;
 - unresolved Trip Life Admin;
 - calendar conflicts;
-- unresolved travel-related review items;
+- unresolved travel review items;
 - important missing dates/locations.
 
-The system must not invent universal requirements.
+The system must not invent universal travel requirements.
 
-Readiness rules should be conservative and based on known Trip context.
+Example derived states: `ready`, `attention`, `incomplete`, `insufficient_data`.
 
-### 21.3 Readiness states
-
-Example:
-
-- `ready`
-- `attention`
-- `incomplete`
-- `insufficient_data`
-
-Readiness is derived and should normally not be persisted as authoritative business data unless caching becomes useful.
-
-## 22. Pre-Trip Briefing
+## 25. Pre-Trip Briefing
 
 A Pre-Trip Briefing combines:
 
 - Trip dates;
 - next Booking/Stage;
 - transport/accommodation summary;
-- important documents;
-- outstanding tasks/Life Admin;
+- important Documents;
+- outstanding Tasks/Life Admin;
 - readiness issues;
 - relevant calendar context;
 - important recent communication changes;
 - source freshness.
 
-The briefing is generated from canonical structured data and source-grounded intelligence.
+It clearly distinguishes confirmed information, missing information and suggestions.
 
-It must clearly distinguish:
+## 26. Suggested Trip Archival
 
-- confirmed information;
-- missing information;
-- suggestions.
-
-## 23. Suggested Trip Archival
-
-Trip archival remains reversible and independent from travel lifecycle, as established in v0.14.
-
-This programme may suggest archival when:
-
-- Trip end date is in the past;
-- there are no current/future itinerary items;
-- the Trip is not already archived;
-- no high-priority unresolved travel item makes the suggestion inappropriate.
+The system may suggest archival when the Trip is past, has no meaningful future itinerary and is not already archived.
 
 The user must confirm.
 
 No automatic Trip archival is introduced.
 
-## 24. Contextual Reminder Presets
+## 27. Contextual Reminder Presets
 
-Reminder defaults should depend on the object being reminded about.
-
-Examples:
+Defaults depend on object type, for example:
 
 - birthday: 7 days / 1 day;
 - document expiry: 90 / 30 / 7 days;
 - Trip departure: 7 / 1 days;
 - Life Admin deadline: category-aware presets;
-- follow-up commitment: expected-response-aware presets;
+- commitment: expected-response-aware presets;
 - Project milestone: target-date-aware presets.
-
-Presets are convenience defaults, not immutable rules.
 
 User-selected reminder timing remains authoritative.
 
-## 25. Records
-
-### 25.1 Definition
+## 28. Records
 
 A **Document** is a file.
 
 A **Record** is a durable historical account of something meaningful that happened.
 
-Records therefore remain distinct from Documents.
-
-### 25.2 Examples
+Example:
 
 ```text
 Record: Australian PR Granted
@@ -1254,56 +1077,17 @@ Linked:
 - Life Admin history
 ```
 
-Other possible Records:
+Records may be created manually, suggested by the system, or prepared by the Agent for approval.
 
-- major purchase;
-- completed major project;
-- significant travel outcome;
-- race result;
-- move;
-- important administrative outcome.
-
-### 25.3 Proposed schema
-
-```text
-records
-- id uuid primary key
-- user_id uuid not null
-- title text not null
-- record_type text not null
-- occurred_at timestamptz null
-- ended_at timestamptz null
-- summary text null
-- source_type text not null
-- created_at timestamptz not null
-- updated_at timestamptz not null
-```
-
-Relationships and evidence are stored through `entity_links` and `entity_sources`.
-
-### 25.4 Creation policy
-
-Records may be:
-
-- created manually;
-- suggested by the system;
-- prepared by the Agent for approval.
-
-The system should not automatically create a Record for every completed task, email or Trip.
-
-### 25.5 Naming
+Do not automatically create Records for every completed task, email or Trip.
 
 The product term is **Records**, not Archive, to avoid confusion with the separate story-archive product.
 
-## 26. Agent architecture
-
-### 26.1 Core principle
+## 29. Agent architecture
 
 The Agent does not receive unrestricted write access to the database or external APIs.
 
-It proposes actions from a fixed registry.
-
-### 26.2 Flow
+Flow:
 
 ```text
 User request / system insight
@@ -1312,13 +1096,13 @@ Agent reasoning
         ↓
 Action proposal
         ↓
-Action Registry lookup
+Action Registry
         ↓
 Schema validation
         ↓
 Risk + permission policy
         ↓
-Preview / approval when required
+Preview / approval where required
         ↓
 Deterministic executor
         ↓
@@ -1327,9 +1111,7 @@ Result
 Audit log
 ```
 
-### 26.3 Action Registry
-
-Initial candidate actions:
+Initial candidate actions may include:
 
 ```text
 task.create
@@ -1348,40 +1130,13 @@ reminder.create
 entity_link.create
 ```
 
-The actual first Agent release may include a smaller subset.
+The initial v0.20 release may include a smaller subset.
 
-Each action definition specifies:
+No arbitrary SQL execution or arbitrary external API execution is allowed as a normal Agent action path.
 
-- action name;
-- description;
-- JSON/schema-validated inputs;
-- required permissions;
-- risk level;
-- reversibility;
-- default automation level;
-- executor;
-- preview formatter;
-- audit formatter.
+## 30. Progressive Automation
 
-### 26.4 No arbitrary SQL/tool execution
-
-The Agent must not generate and execute arbitrary SQL as a normal user-facing action path.
-
-The Agent must not directly call external APIs outside registered actions.
-
-### 26.5 Context assembly
-
-Agent reasoning may retrieve relevant canonical records, search results, entity links and provenance.
-
-The context builder must prefer structured data over large raw dumps.
-
-Sensitive source content should be included only when required for the requested reasoning.
-
-## 27. Progressive Automation
-
-### 27.1 Levels
-
-The system supports these conceptual automation levels:
+Levels:
 
 ```text
 Level 0 — Observe
@@ -1391,30 +1146,13 @@ Level 3 — Approve → Execute
 Level 4 — Trusted automatic execution
 ```
 
-### 27.2 Launch policy
-
 No action launches at Level 4.
 
-Initial behaviour:
+Read-only intelligence may Observe/Recommend. Low-risk internal changes may Prepare. Material changes use Approve → Execute. Destructive or external actions require explicit approval unless a later design intentionally changes that policy.
 
-- read-only intelligence may Observe/Recommend;
-- low-risk internal changes may Prepare;
-- material changes use Approve → Execute;
-- destructive or external actions always require explicit approval unless a later design intentionally changes that policy.
+## 31. Action audit
 
-### 27.3 Future trust policies
-
-If Level 4 is later enabled, it must be configured per action type.
-
-Example:
-
-- `task.complete` may eventually become trusted in narrow conditions;
-- `document.delete` should remain confirmation-only;
-- external communication should remain separately governed.
-
-## 28. Action audit
-
-### 28.1 Proposed schema
+Proposed model:
 
 ```text
 action_runs
@@ -1435,222 +1173,188 @@ action_runs
 - created_at timestamptz not null
 ```
 
-### 28.2 Required properties
+Actions must be traceable, attributable, previewable for material changes, idempotent where practical and testable without an LLM.
 
-Action execution must be:
+## 32. System Health
 
-- idempotent where practical;
-- traceable;
-- attributable;
-- previewable for material changes;
-- testable without invoking an LLM.
-
-An Agent explanation is not a substitute for an execution audit record.
-
-## 29. System Health
-
-### 29.1 User-facing behaviour
-
-Today shows a compact overall state:
+Today shows a compact overall state such as:
 
 - `Systems current`
 - `1 integration needs attention`
+- `Drive backfill paused`
 - `Gmail data is stale`
 
-Opening the health view shows details for sources such as:
+Detail may include:
 
 - Gmail;
 - Calendar;
 - Garmin/fitness;
 - Google Drive;
+- Drive crawl/backfill;
 - scheduled jobs;
 - Daily Pulse generation.
 
-### 29.2 Implementation principle
-
-Reuse existing job/source run data wherever possible.
+Health is derived from last successful run, failure state, expected cadence, stale threshold and auth/connection state.
 
 Do not build a separate monitoring platform solely for this feature.
 
-Health should be derived from:
+## 33. Security and privacy
 
-- last successful run;
-- current failure state;
-- expected cadence;
-- stale threshold;
-- connection/auth status.
-
-## 30. Security and privacy
-
-### 30.1 Ownership
+### 33.1 Ownership and RLS
 
 All new persistent tables use `user_id` and RLS consistent with existing private preston.ai data.
 
-### 30.2 OAuth tokens
+### 33.2 Restricted Drive scope gate
 
-Drive OAuth tokens must be encrypted at rest using the same or stronger pattern as existing Gmail credentials.
+Because whole-Drive reading requires `drive.readonly`, v0.17 must explicitly verify the Google restricted-scope requirements appropriate to the deployed OAuth application before production enablement.
 
-Drive integration should remain application-layer isolated from Gmail even if both use the same Google account.
+If restricted-scope data is stored or transmitted server-side, the phase must account for Google's applicable verification/security-assessment requirements.
 
-The initial Drive scope is `drive.file`.
+This is a release gate, not a reason to weaken the approved product design silently.
 
-### 30.3 Sensitive Documents
+### 33.3 Data minimisation
 
-Document metadata may include a sensitivity classification such as:
-
-- standard;
-- sensitive;
-- highly_sensitive.
-
-Highly sensitive content should not be sent to external AI processing unless the relevant processing path explicitly permits it.
-
-The implementation phase must make the extraction-provider/data-handling decision explicit before enabling such processing.
-
-### 30.4 Source minimization
-
-Do not persist raw content solely because it is available.
+Whole-Drive access does not justify copying every file body into Supabase.
 
 Store what is necessary to support:
 
-- canonical data;
+- canonical Document metadata;
 - provenance;
 - search;
+- linking;
 - review;
-- audit;
+- Records;
+- organisation analysis;
 - user-requested historical context.
 
-### 30.5 Destructive actions
+### 33.4 Sensitive Documents
 
-Destructive actions require explicit confirmation in the initial programme.
+Document sensitivity may include `standard`, `sensitive`, `highly_sensitive`.
 
-This includes:
+Highly sensitive content must not be sent to external AI processing unless the relevant processing path explicitly permits it.
 
-- deleting Drive files;
-- destructive record deletion where history would be lost;
-- any future external-send operation.
+The v0.17 phase must make extraction-provider/data-handling rules explicit before enabling such processing.
 
-## 31. Error handling and reconciliation
+### 33.5 Destructive actions
 
-### 31.1 General rule
+Destructive external actions require explicit confirmation.
 
-External-source failures must not corrupt canonical data.
+The initial programme does not allow the Agent to delete arbitrary Drive files or broadly reorganise Drive automatically.
 
-### 31.2 Google Drive failures
+## 34. Error handling and reconciliation
 
-Examples:
+External failures must not corrupt canonical data.
 
-- upload succeeds but Supabase write fails;
-- Supabase Document is created but upload fails;
-- file is deleted outside preston.ai;
-- permission is revoked;
-- OAuth token expires or is revoked.
+Drive scenarios include:
+
+- inventory page succeeds but checkpoint write fails;
+- extraction fails for one file;
+- file disappears mid-backfill;
+- access is revoked;
+- OAuth token expires/revokes;
+- preston.ai-created upload succeeds but Supabase write fails;
+- Supabase Document exists but upload fails.
 
 Required behaviour:
 
-- maintain processing state;
-- use idempotency keys;
-- make retry safe;
-- avoid duplicate Drive files;
-- surface unresolved failure in System Health or Review Inbox as appropriate;
-- never silently fabricate a successful Document.
+- persistent checkpoints;
+- safe retries;
+- idempotency keys where appropriate;
+- no duplicate Drive files from retry;
+- no duplicate Document records from crawl replay;
+- individual-file failures do not abort the entire crawl;
+- unresolved failures surface through System Health or Review Inbox;
+- no fabricated success state.
 
-### 31.3 Search indexing failures
+Search indexing remains reconstructible and must not block canonical CRUD.
 
-Search indexing is reconstructible.
+Agent failures record validated input, approval state, execution attempt, error and any partial mutation.
 
-An indexing failure must not block the canonical object mutation.
+## 35. Background processing and scheduling
 
-The system records stale/unindexed state and supports repair/rebuild.
+Reuse existing Railway patterns rather than creating one service per small feature.
 
-### 31.4 Agent execution failures
+Principles:
 
-An action failure must record:
-
-- validated input;
-- approval state;
-- execution attempt;
-- error;
-- whether any partial change occurred.
-
-Executors must define compensation or safe retry behaviour when partial external work is possible.
-
-## 32. Background processing and scheduling
-
-The programme should reuse existing Railway patterns rather than creating one service per small feature.
-
-Preferred principles:
-
-- batch source processing where practical;
-- trigger derived work after successful source sync rather than polling unnecessarily;
-- use a small number of scheduled workers for Daily Pulse / maintenance;
+- batch processing where practical;
+- trigger derived work after successful source sync;
+- use a small number of scheduled workers;
 - keep retry/idempotency logic inside domain services;
 - avoid long-running unbounded jobs;
-- advance checkpoints only after successful processing, consistent with current Gmail design.
+- advance checkpoints only after successful bounded work;
+- give Drive crawling/backfill explicit batch/page limits and resumable cursors;
+- allow pause/resume and progress reporting for Drive backfill.
 
-Document extraction, communication intelligence and search indexing may use queue-like database work tables if required, but a new external queue product is not a prerequisite.
+Database work tables may provide queue-like behaviour without adding an external queue product initially.
 
-## 33. Performance
-
-This is a single-user system, so correctness and coherence matter more than premature distributed architecture.
+## 36. Performance
 
 Performance requirements:
 
-- Today should not execute per-card N+1 queries;
-- Universal Search should use indexed Postgres queries;
-- entity-link lookup should be indexed by both `from_entity_id` and `to_entity_id`;
-- search and extraction are derived workloads and should not block core CRUD unnecessarily;
-- Daily Pulse generation should work from current canonical data and compact summaries rather than rereading full raw source corpora;
-- Project/Trip pages should fetch linked entity sets in bounded queries.
+- Today avoids per-card N+1 queries;
+- Universal Search uses indexed Postgres queries;
+- entity links are indexed in both directions;
+- derived search/extraction work does not block core CRUD unnecessarily;
+- Daily Pulse uses current canonical data and compact summaries rather than rereading raw corpora;
+- Project/Trip pages fetch linked entity sets in bounded queries;
+- Drive inventory uses pagination and bounded batches;
+- content extraction is progressive rather than a single full-Drive burst;
+- crawl status/progress is observable.
 
-## 34. Migration and backfill
+## 37. Migration and backfill
 
-### 34.1 Entity registry backfill
+### 37.1 Entity registry
 
-When the shared layer launches, backfill entity rows for supported existing canonical records.
+Backfill supported canonical records idempotently.
 
-The backfill must be idempotent.
+### 37.2 Existing relationships
 
-### 34.2 Existing relationships
+Existing explicit FKs and source-link tables remain valid. Mirror only relationships needed by new shared features rather than speculatively converting every historical relationship.
 
-Existing explicit foreign keys and source-link tables remain valid.
+### 37.3 Search
 
-Only relationships needed by new shared features should be mirrored into `entity_links` initially.
+Universal Search launch includes a controlled rebuild of supported existing entities. Search documents are derived and rebuildable.
 
-Do not perform a broad speculative migration of every relationship in the database.
+### 37.4 Gmail communications
 
-### 34.3 Search backfill
+Do not replay the entire mailbox blindly. The v0.18 phase chooses a bounded historical window and checkpoint/rate-limit policy.
 
-Universal Search launch includes a controlled rebuild of searchable entities.
+### 37.5 Drive document backfill
 
-Search documents are derived and may be safely rebuilt from canonical data.
+Drive backfill intentionally differs from Gmail backfill: the approved product goal is to inventory user-owned My Drive comprehensively.
 
-### 34.4 Gmail communication backfill
+Backfill occurs in stages:
 
-Communications Intelligence should not replay the entire mailbox blindly.
+1. authenticate/verify corpus;
+2. metadata inventory;
+3. structural/folder analysis;
+4. prioritise eligible content;
+5. extract/classify in bounded batches;
+6. create/update Document records;
+7. propose entity links;
+8. index searchable content;
+9. generate Drive Organisation Review recommendations.
 
-Initial backfill should use a bounded window and/or known existing source records.
+The crawl is resumable and repeatable. Re-running it updates changed files and must not duplicate unchanged Documents.
 
-The implementation plan must define the chosen window, checkpoint behaviour and rate limits before execution.
+Historical Gmail attachments are not copied into Drive merely because similar files are discovered in Drive.
 
-### 34.5 Document history
+## 38. Testing strategy
 
-Existing Gmail attachments are not automatically copied into Drive en masse.
+Each phase follows TDD.
 
-Document ingestion begins with new relevant attachments plus selected historical backfill approved in the implementation phase.
-
-## 35. Testing strategy
-
-Each implementation phase follows TDD and adds tests at the appropriate level.
-
-### 35.1 Unit tests
+### 38.1 Unit tests
 
 Examples:
 
 - entity registry identity;
-- entity-link authority rules;
-- search document generation;
-- search ranking;
-- document metadata extraction normalization;
+- entity-link authority;
+- search document generation/ranking;
+- document metadata normalisation;
+- Drive ownership/corpus filters;
+- Drive crawl cursor/checkpoint logic;
+- Drive dedupe/change detection;
+- organisation recommendation generation;
 - commitment state transitions;
 - confidence/review routing;
 - reminder presets;
@@ -1659,43 +1363,37 @@ Examples:
 - automation-level policy;
 - idempotency keys.
 
-### 35.2 Service/integration tests
+### 38.2 Integration tests
 
 Examples:
 
+- existing Drive file → inventory → Document row → Search;
+- crawl interruption → resume without duplicates;
+- Drive file move → same Document identity;
+- Drive file deletion → unavailable state;
+- organisation analysis → proposal only, no mutation;
 - Gmail attachment → Drive upload → Document row;
-- Drive failure recovery;
 - Document → Search indexing;
 - new Gmail message → thread update → commitment supersession;
 - Review acceptance → canonical mutation;
 - Project aggregation across linked domains;
 - Agent proposal → approval → executor → audit;
-- Daily Pulse generation after source changes.
+- Daily Pulse generation after source changes;
+- Recovery & Training appears in Today without a separate Morning Digest destination.
 
-### 35.3 Migration tests
+### 38.3 End-to-end acceptance scenarios
 
-Every new migration must verify:
+1. Search `Queenstown` and see Trip + linked Documents + Project/communications where applicable.
+2. Run Drive backfill, discover an existing travel-insurance file, classify it and propose the correct Trip link without copying the file.
+3. Review a Drive organisation plan and confirm no files were moved merely by generating/accepting the review proposal.
+4. Receive a new Gmail travel-insurance attachment, file it to Drive and make it searchable without duplication.
+5. Detect an email commitment, process a later cancellation and ensure it no longer appears open.
+6. Create Goal → Project → Milestones and link existing Tasks/Documents without duplication.
+7. Open Today in the morning and see recovery/training plus action context on one page.
+8. Process a midday source change and see Today emphasise the delta rather than creating a second dashboard.
+9. Propose an Agent action, preview it, approve it, execute it once and see an audit record.
 
-- constraints;
-- ownership;
-- RLS;
-- idempotent backfill behaviour;
-- rollback/forward safety where appropriate.
-
-### 35.4 End-to-end acceptance tests
-
-Representative scenarios:
-
-1. Search for `Queenstown` and see Trip + linked Documents + Project/communications where applicable.
-2. Receive a travel-insurance attachment, review/file it, then see it linked to the Trip and searchable.
-3. Detect an email commitment, later process a cancelling message, and confirm the commitment is no longer shown as open.
-4. Create Goal → Project → Milestones and attach existing Tasks/Documents without duplication.
-5. View Today morning, process a midday source change, and see the later Daily Pulse emphasize the change.
-6. Propose an Agent action, preview it, approve it, execute it once, and see an audit record.
-
-## 36. Release decomposition
-
-This umbrella design should be implemented as multiple independently releasable phases.
+## 39. Release decomposition
 
 ### v0.15 — Intelligence Foundation
 
@@ -1711,12 +1409,12 @@ Primary scope:
 Exit criteria:
 
 - existing domains remain canonical;
-- entity backfill succeeds idempotently;
+- entity backfill is idempotent;
 - search returns useful cross-domain results;
 - provenance remains intact;
 - no existing workflow regression.
 
-### v0.16 — Goals & Daily Pulse
+### v0.16 — Goals & Today Intelligence
 
 Primary scope:
 
@@ -1724,8 +1422,9 @@ Primary scope:
 - Projects;
 - Milestones;
 - Project relationships;
-- Today evolution;
-- Daily Pulse;
+- unify Morning Digest intelligence into Today;
+- Recovery & Training section;
+- Daily Pulse/time-of-day evolution;
 - dashboard quick actions;
 - first-class Waiting;
 - Global Quick Add;
@@ -1735,33 +1434,44 @@ Primary scope:
 
 Exit criteria:
 
+- there is one home dashboard, Today;
+- existing fitness/recovery intelligence remains available within Today;
+- no duplicate Morning Digest destination remains necessary;
 - Projects do not duplicate Tasks;
 - linked objects aggregate correctly;
-- Today can update throughout the day;
+- Today updates meaningfully during the day;
 - quick actions use canonical services;
 - Waiting semantics are clear.
 
-### v0.17 — Documents & Search Expansion
+### v0.17 — Drive Intelligence & Documents
 
 Primary scope:
 
-- Google Drive OAuth with `drive.file`;
-- `preston.ai Documents` Drive folder;
-- Google Picker;
+- Google Drive OAuth with `drive.readonly` + `drive.file`;
+- restricted-scope production release gate;
+- user-owned My Drive inventory;
+- resumable metadata crawl;
 - Documents model;
-- extraction pipeline;
-- entity linking;
+- progressive extraction/classification;
+- Drive-to-entity linking;
+- whole-Drive document backfill;
+- Drive Organisation Review;
+- reorganisation recommendations;
+- Google Picker for explicit write-grant/file selection workflows where still useful;
 - Gmail attachment filing;
 - document provenance;
-- document search indexing.
+- Search expansion to Documents.
 
 Exit criteria:
 
-- files live in Drive, not Railway/Supabase binary storage;
-- duplicate attachment ingestion is prevented;
+- restricted-scope requirements are resolved before production crawl enablement;
+- My Drive crawl is bounded, resumable and observable;
+- existing Drive files become Documents without unnecessary copying;
+- duplicate crawl/attachment ingestion is prevented;
 - missing/revoked Drive files are handled safely;
-- Search includes Documents;
-- sensitive-file handling is explicit.
+- Search includes backfilled Documents;
+- organisation recommendations do not mutate arbitrary existing Drive content;
+- sensitive-file processing rules are explicit.
 
 ### v0.18 — Communications Intelligence
 
@@ -1777,7 +1487,7 @@ Primary scope:
 
 Exit criteria:
 
-- later messages can correctly supersede earlier commitment state;
+- later messages can supersede earlier commitment state;
 - uncertain changes route to review;
 - Gmail remains read-only;
 - full-mail duplication is not introduced.
@@ -1791,14 +1501,14 @@ Primary scope:
 - suggested Trip archival;
 - Records;
 - Record/entity/document linking;
-- deeper source/provenance presentation.
+- deeper provenance presentation.
 
 Exit criteria:
 
 - readiness does not invent requirements;
 - archival is suggestion-only;
 - Records remain distinct from Documents and story Archive;
-- Pre-Trip Briefings are source-grounded.
+- briefings are source-grounded.
 
 ### v0.20 — Agent
 
@@ -1811,88 +1521,105 @@ Primary scope:
 - approval flow;
 - deterministic executors;
 - action audit;
-- progressive automation levels;
-- a conservative initial action set.
+- progressive automation;
+- conservative initial action set.
 
 Exit criteria:
 
 - no unrestricted SQL/API execution;
-- all material actions are previewable/audited;
+- material actions are previewable/audited;
 - retries are safe;
-- no Level-4 automatic actions launch by default;
-- Gmail write permissions remain unchanged unless separately approved.
+- no Level-4 action launches by default;
+- Gmail write permissions remain unchanged unless separately approved;
+- broad Drive write/reorganisation authority is not introduced unless separately approved.
 
-## 37. Release process
-
-Each phase receives:
-
-1. a detailed implementation plan;
-2. an isolated implementation branch;
-3. TDD coverage;
-4. migration verification;
-5. UAT where applicable;
-6. release gates;
-7. explicit merge/deploy decision.
+## 40. Release process
 
 This umbrella design does not authorize implementation of all phases at once.
 
-A later phase may refine internal schemas when implementation evidence requires it, but it must preserve the architectural principles in this document unless the design is explicitly amended.
+Each phase receives, in order:
 
-## 38. Acceptance criteria for the overall programme
+1. a focused Superpowers phase design/spec refining only that phase;
+2. user review/approval of that phase spec;
+3. a detailed implementation plan;
+4. an isolated implementation branch;
+5. TDD coverage;
+6. migration/integration verification;
+7. UAT where applicable;
+8. release gates;
+9. explicit merge/deploy decision.
+
+A phase may refine internal schemas when implementation evidence requires it, but must preserve this document's locked architectural decisions unless this umbrella design is explicitly amended.
+
+## 41. Overall acceptance criteria
 
 The programme is successful when:
 
-1. a user can search across preston.ai without knowing which module owns the data;
-2. cross-domain relationships are represented through a common link model without replacing canonical domain tables;
-3. important files live in the user’s Google Drive and remain intelligible/searchable in preston.ai;
-4. Gmail attachments can become Documents safely and idempotently;
-5. communication commitments are thread-aware and can be resolved/superseded correctly;
-6. uncertain automation has one shared Review Inbox;
-7. Goals, Projects and Milestones organize work without duplicating Tasks;
-8. Today updates meaningfully throughout the day and emphasizes changes;
-9. Waiting is visible and understandable;
-10. Trip readiness and briefings are useful without inventing missing requirements;
-11. Records preserve meaningful historical context distinct from file storage;
-12. every imported/inferred/actionable item can expose useful provenance;
-13. the Agent operates only through registered, validated actions;
-14. material Agent actions require appropriate approval and produce an audit trail;
-15. no autonomous destructive or external action is introduced by default;
-16. the system continues to run comfortably within the existing Railway + Supabase architecture.
+1. the user can search across preston.ai without knowing which module owns the data;
+2. cross-domain relationships use a common link model without replacing canonical domain tables;
+3. important files remain in Google Drive while becoming intelligible/searchable in preston.ai;
+4. existing user-owned My Drive content can be progressively backfilled into Documents;
+5. Drive structure can be analysed and simplified through recommendations without silent broad mutation;
+6. Gmail attachments can become Documents safely and idempotently;
+7. communication commitments are thread-aware and can be resolved/superseded;
+8. uncertain automation has one shared Review Inbox;
+9. Goals, Projects and Milestones organise work without duplicating Tasks;
+10. Today is the single home dashboard and includes recovery/training intelligence;
+11. Today updates meaningfully throughout the day and emphasises changes;
+12. Waiting is visible and understandable;
+13. Trip readiness and briefings are useful without inventing requirements;
+14. Records preserve meaningful historical context distinct from file storage;
+15. imported/inferred/actionable items expose useful provenance;
+16. the Agent operates only through registered, validated actions;
+17. material Agent actions require appropriate approval and produce an audit trail;
+18. no autonomous destructive or external action is introduced by default;
+19. the system continues to run within the existing Railway + Supabase architecture.
 
-## 39. Design decisions locked by this spec
+## 42. Locked design decisions
 
-The following decisions are considered approved architectural constraints unless this design is amended:
+The following are approved architectural constraints unless this design is amended:
 
 - existing domain tables remain canonical;
 - cross-domain intelligence uses Entity Registry + Entity Links;
 - Supabase/Postgres remains the shared data/intelligence store;
 - Railway remains the application/worker environment;
 - Google Drive is the binary file store for Documents;
-- Drive authorization begins with `drive.file`, not whole-Drive read access;
-- Supabase stores document metadata/extracted intelligence, not the canonical binary file;
+- whole-Drive discovery uses `drive.readonly` for user-owned My Drive;
+- app-managed file writing uses `drive.file` initially;
+- broad Drive read access does not imply broad Drive write authority;
+- Drive backfill is bounded, resumable and checkpointed;
+- Drive Organisation Intelligence is proposal-first;
+- broad automatic Drive reorganisation/deletion is not allowed initially;
+- Supabase stores document metadata/extracted intelligence, not canonical binary files;
 - Documents and Records are distinct concepts;
 - Gmail remains read-only through the initial Agent programme;
 - Communications Intelligence is thread-aware;
 - Review Inbox is shared across intelligent subsystems;
-- Today/Daily Pulse remains distinct from Morning Digest;
+- Today is the sole primary home dashboard;
+- Morning Digest is absorbed into Today's Recovery & Training intelligence;
+- Daily Pulse is an internal Today-update mechanism, not a second dashboard;
 - the Agent uses a fixed Action Registry and deterministic executors;
 - no Level-4 automation launches by default;
 - Trip archival remains user-confirmed;
 - Universal Search starts with Postgres full-text/fuzzy search; semantic embeddings are optional later;
 - no graph/search/vector/queue infrastructure product is required initially.
 
-## 40. Open implementation details intentionally deferred
+## 43. Open implementation details intentionally deferred
 
-The following are not architectural ambiguities; they are implementation-plan decisions to be made in the relevant phase:
+These are implementation-plan decisions, not unresolved architecture:
 
-- exact UI layout and responsive treatment of the persistent nav;
+- exact UI layout/responsive treatment of Today and persistent nav;
 - exact ranking weights for Universal Search;
-- whether entity registration is eager or lazy per legacy domain;
+- eager vs lazy entity registration per legacy domain;
 - exact Daily Pulse worker/cron wiring;
 - exact bounded Gmail backfill window for Communications Intelligence;
+- exact Drive API crawl page/batch sizes and checkpoint schema;
+- exact prioritisation rules for Drive content extraction;
+- exact Drive organisation scoring/duplicate heuristics;
+- exact Google restricted-scope verification/security path required for this private deployment;
 - exact document extraction library/provider choices;
-- exact list of first Agent actions in v0.20;
+- exact first Agent action set in v0.20;
 - which low-risk review proposals may auto-confirm after confidence thresholds are measured;
 - exact sensitivity rules for external AI processing of highly sensitive Documents.
 
-Those decisions must be resolved before implementation of the relevant phase and must not contradict the locked design decisions above.
+Those details must be resolved before implementation of the relevant phase and must not contradict the locked decisions above.
