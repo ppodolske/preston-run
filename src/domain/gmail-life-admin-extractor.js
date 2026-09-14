@@ -57,8 +57,10 @@ function explicitReference(text){
   return null;
 }
 function labeledLocation(text){
-  for(const line of String(text||'').split(/\r?\n/)){const match=line.trim().match(/^(?:venue\s+address|location|address)\s*:\s*(.+)$/i);if(match&&match[1].trim())return match[1].trim();}
-  return null;
+  const value=String(text||'');
+  for(const line of value.split(/\r?\n/)){const match=line.trim().match(/^(?:venue\s+address|location|address)\s*:\s*(.+)$/i);if(match&&match[1].trim())return match[1].trim();}
+  const inline=value.match(/(?:venue\s+address|location|address)\s*:\s*(.+?)(?=\s+(?:(?:manage|modify|view)(?:\s+(?:your|the))?\s+(?:booking|reservation)|booking\s+(?:reference|ref|number)|confirmation\s*:|reservation\s+(?:reference|time)|booking\s+time)\b|$)/i);
+  return inline&&inline[1]?inline[1].trim():null;
 }
 function bookingUrl(text){
   const value=String(text||'');
