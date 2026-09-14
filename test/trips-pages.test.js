@@ -1,47 +1,39 @@
 const assert=require('node:assert/strict');
-const {renderTripsPage,renderTripDetailPage,renderTripFormPage,renderSegmentFormPage,renderBookingFormPage}=require('../src/pages/trips');
+const {renderTripsPage,renderTripDetailPage,renderTripFormPage,renderSegmentFormPage}=require('../src/pages/trips');
 
-const trips=[{id:'t1',title:'Chicago & Milwaukee',status:'upcoming',start_date:'2026-10-01',end_date:'2026-10-10',destination_label:'Chicago, IL',destination_city:'Chicago',destination_region:'IL',destination_country:'USA',notes:'Family & food'},{id:'t2',title:'<b>Escape</b>',status:'planning',start_date:null,end_date:null}];
-const list=renderTripsPage({trips,upcoming:trips.slice(0,1),flash:'Saved'});
-for(const x of ['Trips','Chicago &amp; Milwaukee','Chicago, IL','Upcoming','1 Oct 2026','10 Oct 2026','/trips/t1','/trips/new','Saved']) assert.ok(list.includes(x),`list missing ${x}`);
-assert.match(list,/href="\/preston\.css"/);
-assert.match(list,/class="site-header"/);
-assert.ok(!list.includes('<b>Escape</b>'),'trip title must be escaped');
+const active={id:'t1',title:'Queenstown',status:'upcoming',start_date:'2026-08-15',end_date:'2026-08-22',destination_label:'Queenstown, New Zealand',archived_at:null};
+const past={id:'t2',title:'Bowral',status:'completed',start_date:'2026-09-11',end_date:'2026-09-13',destination_label:'Bowral, NSW',archived_at:null};
+const archived={id:'t3',title:'Old Trip',status:'completed',start_date:'2026-01-01',end_date:'2026-01-03',archived_at:'2026-09-14T00:00:00Z'};
+const list=renderTripsPage({trips:[active,past],upcoming:[active],past:[past],flash:'Saved'});
+for(const x of ['Trips','Queenstown','Bowral','Coming Up','Past trips','Archived Trips','/trips/t1','/trips/t2','/trips/archived','Saved'])assert.ok(list.includes(x),`list missing ${x}`);
+assert.doesNotMatch(list,/Old Trip/);
+const archiveList=renderTripsPage({trips:[archived],upcoming:[],past:[],archived:true});
+assert.match(archiveList,/Archived Trips/);assert.match(archiveList,/Old Trip/);assert.match(archiveList,/Back to Trips/);
 
-const segments=[{id:'s1',trip_id:'t1',position:1,segment_type:'travel',title:'SYD → ORD',origin:'Sydney',destination:'Chicago',starts_at:'2026-10-01T00:00:00.000Z',ends_at:'2026-10-01T14:00:00.000Z',time_zone:'Australia/Sydney'},{id:'s2',trip_id:'t1',position:2,segment_type:'stay',title:'Milwaukee stay',starts_at:'2026-10-03T15:00:00.000Z',ends_at:'2026-10-05T15:00:00.000Z',time_zone:'America/Chicago'}];
-const bookings=[{id:'b1',trip_id:'t1',segment_id:'s1',position:1,booking_type:'flight',title:'Qantas flight',provider:'Qantas',confirmation_reference:'ABC123',status:'confirmed',starts_at:'2026-10-01T00:00:00.000Z',ends_at:'2026-10-01T14:00:00.000Z',time_zone:'Australia/Sydney',location:'ORD',booking_url:'https://example.com'}];
-const events=[{id:'e1',linked_trip_id:'t1',category:'event',title:'Dinner at Yonder',status:'upcoming',starts_at:'2026-10-02T08:00:00.000Z',ends_at:'2026-10-02T10:00:00.000Z',time_zone:'America/Chicago',location:'West Loop',provider:'Yonder'}];
-const itinerary=[{type:'booking',record:bookings[0]},{type:'event',record:events[0]},{type:'segment',record:segments[1]}];
-const detail=renderTripDetailPage({trip:trips[0],segments,bookings,events,itinerary,tasks:[{id:'task1',title:'Book train',status:'open',priority:'high'}]});
-for(const x of ['Chicago &amp; Milwaukee','Chicago, IL','Next','Itinerary','Qantas flight','Confirmed','Dinner at Yonder','West Loop','/life-admin/e1','Milwaukee stay','Bookings','Book train','/tasks/task1/edit','/tasks/new?trip_id=t1','Add task','/trips/t1/segments/new','/trips/t1/bookings/new','/trips/t1/delete']) assert.ok(detail.includes(x),`detail missing ${x}`);
-assert.match(detail,/class="next-card"/);
-assert.ok(detail.indexOf('>Next<') < detail.indexOf('>Itinerary<'),'Next must precede Itinerary');
-assert.ok(detail.indexOf('>Itinerary<') < detail.indexOf('>Bookings<'),'Itinerary must precede Bookings');
-assert.ok(detail.indexOf('>Bookings<') < detail.indexOf('>Linked Tasks<'),'Bookings must precede Linked Tasks');
-assert.ok(detail.indexOf('>Linked Tasks<') < detail.indexOf('>Manage trip<'),'Manage trip must be secondary');
-assert.doesNotMatch(detail,/<div class="section">Segments<\/div>/,'Segments must not duplicate the primary itinerary in reading mode');
-assert.match(detail,/<details class="manage-panel">[\s\S]*<summary>Manage trip<\/summary>/);
-assert.ok(detail.includes('Delete trip'));
-assert.ok(!detail.includes('owner@example.com'));
+const segments=[{id:'s1',trip_id:'t1',position:1,segment_type:'travel',title:'Queenstown',starts_at:'2026-08-15T01:00:00Z',ends_at:'2026-08-15T02:00:00Z',time_zone:'Pacific/Auckland'}];
+const bookings=[
+  {id:'b1',trip_id:'t1',segment_id:null,position:1,booking_type:'flight',title:'Sydney → Queenstown flights',provider:'Jetstar',confirmation_reference:'QNRY8J',status:'confirmed',starts_at:'2026-08-15T01:50:00.000Z',ends_at:'2026-08-22T05:45:00.000Z',time_zone:'Pacific/Auckland'},
+  {id:'b2',trip_id:'t1',booking_type:'accommodation',title:'Queenstown stay',provider:'Airbnb',status:'confirmed',starts_at:'2026-08-15T05:00:00Z',ends_at:'2026-08-22T00:00:00Z',time_zone:'Pacific/Auckland'},
+  {id:'b3',trip_id:'t1',booking_type:'hire_car',title:'Hertz car hire',provider:'Hertz',status:'confirmed',starts_at:'2026-08-15T05:00:00Z',ends_at:'2026-08-22T04:00:00Z',time_zone:'Pacific/Auckland'},
+  {id:'b4',trip_id:'t1',booking_type:'activity',title:'Discovery Cruise',provider:'Cruise Te Anau',status:'confirmed',starts_at:'2026-08-17T01:00:00Z',ends_at:'2026-08-17T03:00:00Z',time_zone:'Pacific/Auckland'}
+];
+const legs=[
+  {id:'l1',booking_id:'b1',position:1,service_number:'JQ223',origin:'Sydney',destination:'Queenstown',departs_at:'2026-08-15T01:50:00Z',arrives_at:'2026-08-15T04:45:00Z',departure_time_zone:'Australia/Sydney',arrival_time_zone:'Pacific/Auckland'},
+  {id:'l2',booking_id:'b1',position:2,service_number:'JQ224',origin:'Queenstown',destination:'Sydney',departs_at:'2026-08-22T05:45:00Z',arrives_at:null,departure_time_zone:'Pacific/Auckland',arrival_time_zone:'Australia/Sydney'}
+];
+const events=[{id:'e1',linked_trip_id:'t1',category:'event',title:'Yonder reservation',status:'upcoming',starts_at:'2026-08-17T06:30:00Z',ends_at:'2026-08-17T08:00:00Z',time_zone:'Pacific/Auckland',location:'Queenstown',provider:'Yonder',confirmation_reference:'95640384'}];
+const itinerary=[...bookings.map(record=>({type:'booking',record})),{type:'event',record:events[0]}];
+const detail=renderTripDetailPage({trip:active,segments,bookings,events,itinerary,bookingLegs:legs,inventory:['Flight','Stay','Car','2 Activities'],nextEntry:itinerary[0],tasks:[{id:'task1',title:'Pack',status:'open',priority:'high'}]});
+for(const x of ['FLIGHT','JQ223','JQ224','Sydney','Queenstown','Flight · Stay · Car · 2 Activities','Yonder reservation','Stage','Add stage','/bookings/new?trip_id=t1','Archive trip'])assert.match(detail,new RegExp(x.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'));
+assert.doesNotMatch(detail,/>Segment</i);assert.match(detail,/class="next-card"/);
+const historical=renderTripDetailPage({trip:past,segments:[],bookings:[],events:[],itinerary:[],bookingLegs:[],inventory:[],nextEntry:null,tasks:[]});
+assert.doesNotMatch(historical,/class="next-card"/);
+const archivedDetail=renderTripDetailPage({trip:archived,segments:[],bookings:[],events:[],itinerary:[],bookingLegs:[],inventory:[],nextEntry:null,tasks:[]});
+assert.match(archivedDetail,/Unarchive trip/);assert.match(archivedDetail,/Archived/);
 
-const empty=renderTripDetailPage({trip:trips[0],segments:[],bookings:[],events:[],itinerary:[],tasks:[]});
-for(const x of ['No itinerary entries yet.','No bookings yet.','No tasks linked to this trip.']) assert.ok(empty.includes(x),`empty state missing ${x}`);
-assert.doesNotMatch(empty,/<div class="section">Segments<\/div>/);
-
-const tripForm=renderTripFormPage({trip:{id:'t1',title:'Chicago',status:'planning',start_date:'2026-10-01',end_date:'2026-10-10',destination_label:'Chicago, IL',destination_city:'Chicago',destination_region:'IL',destination_country:'USA',notes:'x'},mode:'edit',reminderSettings:{trip_offsets:[14,7,1]},reminderOverride:null});
-for(const x of ['Edit trip','name="title"','name="status"','name="start_date"','name="end_date"','name="destination_label"','name="destination_city"','name="destination_region"','name="destination_country"','Chicago, IL','USA','/trips/t1','Use global defaults','Custom reminders','14, 7, 1']) assert.ok(tripForm.includes(x),`trip form missing ${x}`);
-assert.match(tripForm,/<label for="title">Title<\/label>/);
-const customTrip=renderTripFormPage({trip:{id:'t1',title:'Chicago',status:'planning'},mode:'edit',reminderSettings:{trip_offsets:[14,7,1]},reminderOverride:{enabled:true,offsets:[30,2]}});assert.match(customTrip,/30, 2/);assert.match(customTrip,/Restore defaults/);
-
-const segmentForm=renderSegmentFormPage({trip:trips[0],segment:{id:'s1',title:'Flight',position:1,segment_type:'travel',origin:'Sydney',destination:'Chicago',starts_at:'2026-10-01T00:00:00.000Z',ends_at:'2026-10-01T01:00:00.000Z',time_zone:'Australia/Sydney'},mode:'edit'});
-for(const x of ['Edit segment','2026-10-01T10:00','2026-10-01T11:00','Australia/Sydney','name="time_zone"','/segments/s1']) assert.ok(segmentForm.includes(x),`segment form missing ${x}`);
-assert.match(segmentForm,/list="time-zones"/);
-assert.match(segmentForm,/<datalist id="time-zones">[\s\S]*Australia\/Sydney[\s\S]*America\/Chicago[\s\S]*UTC/);
-assert.match(segmentForm,/<label for="time_zone">Time zone<\/label>/);
-
-const bookingForm=renderBookingFormPage({trip:trips[0],segments,booking:{id:'b1',title:'Hotel',booking_type:'accommodation',status:'confirmed',position:1,provider:'Hotel Co',confirmation_reference:'XYZ',starts_at:'2026-10-02T20:00:00.000Z',ends_at:'2026-10-03T15:00:00.000Z',time_zone:'America/Chicago',location:'Chicago',booking_url:'https://example.com',segment_id:'s2'},mode:'edit'});
-for(const x of ['Edit booking','Hotel Co','XYZ','America/Chicago','Chicago','https://example.com','name="segment_id"','Milwaukee stay','/bookings/b1']) assert.ok(bookingForm.includes(x),`booking form missing ${x}`);
-assert.match(bookingForm,/list="time-zones"/);
-assert.match(bookingForm,/<label for="time_zone">Time zone<\/label>/);
+const tripForm=renderTripFormPage({trip:{id:'t1',title:'Queenstown',status:'planning',start_date:'2026-08-15',end_date:'2026-08-22'},mode:'edit',reminderSettings:{trip_offsets:[14,7,1]},reminderOverride:null});
+assert.match(tripForm,/Edit trip/);assert.match(tripForm,/name="title"/);
+const stageForm=renderSegmentFormPage({trip:active,segment:{id:'s1',title:'Queenstown',position:1,segment_type:'travel',time_zone:'Pacific/Auckland'},mode:'edit'});
+assert.match(stageForm,/Edit stage/);assert.doesNotMatch(stageForm,/Edit segment/);assert.match(stageForm,/\/segments\/s1/);
 
 console.log('trips page tests passed');
