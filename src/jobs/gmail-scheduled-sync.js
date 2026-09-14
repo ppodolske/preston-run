@@ -65,7 +65,8 @@ async function runScheduledGmailSyncJob({mode,now=new Date(),env=process.env,dep
   if(mode!=='morning'){
     const createTransport=deps.createTransport||createPushTransport;
     const urgent=deps.runUrgent||runUrgentCheck;
-    const pushTransport=createTransport({publicKey:required(config,'vapidPublicKey'),privateKey:required(config,'vapidPrivateKey'),subject:required(config,'vapidSubject')});
+    const transportConfig=deps.createTransport?{publicKey:config.vapidPublicKey||'',privateKey:config.vapidPrivateKey||'',subject:config.vapidSubject||''}:{publicKey:required(config,'vapidPublicKey'),privateKey:required(config,'vapidPrivateKey'),subject:required(config,'vapidSubject')};
+    const pushTransport=createTransport(transportConfig);
     urgentResult=await urgent({supabase,userId,now,pushTransport,mode});
   }
   return{skipped:false,mode,scanSkipped,scanResult,urgentResult};
