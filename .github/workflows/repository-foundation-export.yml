@@ -1,0 +1,39 @@
+name: Repository foundation export
+
+on:
+  push:
+    branches:
+      - ops/repository-foundation-export
+
+permissions:
+  contents: read
+
+jobs:
+  export-canonical-preston-ai:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact canonical preston.ai source
+        uses: actions/checkout@v4
+        with:
+          ref: bf55df6298b95b7523d2b004dfee4366f61e9080
+          fetch-depth: 1
+
+      - name: Package canonical source tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar --exclude=.git -czf /tmp/preston-ai-canonical.tar.gz .
+          sha256sum /tmp/preston-ai-canonical.tar.gz | tee /tmp/preston-ai-canonical.sha256
+          printf '%s\n' 'source_sha=bf55df6298b95b7523d2b004dfee4366f61e9080' > /tmp/preston-ai-canonical.manifest
+          cat /tmp/preston-ai-canonical.sha256 >> /tmp/preston-ai-canonical.manifest
+
+      - name: Upload canonical preston.ai source artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: preston-ai-canonical-bf55df6
+          path: |
+            /tmp/preston-ai-canonical.tar.gz
+            /tmp/preston-ai-canonical.sha256
+            /tmp/preston-ai-canonical.manifest
+          if-no-files-found: error
+          retention-days: 1
