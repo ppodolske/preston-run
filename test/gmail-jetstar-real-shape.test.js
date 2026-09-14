@@ -70,12 +70,15 @@ Cabin Baggage
 
 Starter fares include a carry-on baggage allowance of one bag and one small personal item.`;
 
-const result=extractBookingCandidate({
-  sender:'Jetstar <noreplyitineraries@jetstar.com>',
-  subject:'Jetstar Flight Itinerary for (Booking ref# QNRY8J) JQ223 15/08/2026 JQ224 22/08/2026',
-  text
-},{parserVersion:'gmail-parser-v0.14.0'});
+function extract(textValue){
+  return extractBookingCandidate({
+    sender:'Jetstar <noreplyitineraries@jetstar.com>',
+    subject:'Jetstar Flight Itinerary for (Booking ref# QNRY8J) JQ223 15/08/2026 JQ224 22/08/2026',
+    text:textValue
+  },{parserVersion:'gmail-parser-v0.14.0'});
+}
 
+const result=extract(text);
 assert.equal(result.candidate.confirmation_reference,'QNRY8J');
 assert.equal(result.candidate.legs.length,2,'real Jetstar itinerary spacing and trailing sections must produce two legs');
 assert.deepEqual(result.candidate.legs.map(x=>x.service_number),['JQ223','JQ224']);
@@ -110,4 +113,23 @@ assert.ok(diagnostics.jq224PreviousTimeDistance>0);
 assert.ok(diagnostics.jq223Index>=0&&diagnostics.jq224Index>diagnostics.jq223Index);
 assert.ok(diagnostics.flight1Index>diagnostics.jq224Index&&diagnostics.flight2Index>diagnostics.flight1Index);
 assert.ok(diagnostics.baggageIndex>diagnostics.flight2Index);
+
+const liveNormalizedText=text
+  .replace('11:50am / 11:50\n\nJQ223','11:50am / 11:50 Flight number JQ223')
+  .replace('5:45pm / 17:45\n\nJQ224','5:45pm / 17:45 Flight number JQ224');
+const liveDiagnostics=jetstarDiagnostics(liveNormalizedText,{maxLength:120000});
+assert.equal(liveDiagnostics.flightRowCount,0,'production-normalized Flight number label must reproduce the current strict-row failure');
+assert.equal(liveDiagnostics.timeServiceCount,0);
+assert.equal(liveDiagnostics.jq223PreviousTimeGapHasNonWhitespace,true);
+assert.equal(liveDiagnostics.jq224PreviousTimeGapHasNonWhitespace,true);
+const liveResult=extract(liveNormalizedText);
+assert.equal(liveResult.candidate.legs.length,2,'Jetstar parser must tolerate the normalized Flight number label between departure time and JQ service number');
+assert.deepEqual(liveResult.candidate.legs.map(x=>[x.service_number,x.origin,x.destination]),[
+  ['JQ223','Sydney','Queenstown'],
+  ['JQ224','Queenstown','Sydney']
+]);
+assert.equal(liveResult.candidate.legs[0].departs_at,'2026-08-15T01:50:00.000Z');
+assert.equal(liveResult.candidate.legs[0].arrives_at,'2026-08-15T04:45:00.000Z');
+assert.equal(liveResult.candidate.legs[1].departs_at,'2026-08-22T05:45:00.000Z');
+assert.equal(liveResult.candidate.legs[1].arrives_at,'2026-08-22T09:00:00.000Z');
 console.log('real Jetstar shape test passed');
