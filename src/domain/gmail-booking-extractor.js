@@ -31,7 +31,7 @@ function parseMonthFirstDates(text){return [...String(text||'').matchAll(/\b(Jan
 function firstRoute(text){const m=String(text||'').match(/\b([A-Z][A-Za-z .'-]{1,40}?)\s+to\s+([A-Z][A-Za-z .'-]{1,40}?)(?=\s+\d{1,2}[\/\s]|\s+on\b|[.;\n]|$)/);return m?{origin:clean(m[1]),destination:clean(m[2])}:null;}
 function parseJetstarRoute(text){
   const value=String(text||'');
-  const explicit=value.match(/Flight\s*#1\s*:\s*([A-Za-z][A-Za-z .'-]*?)(?:\s*\([^)]*\))?\s*>\s*([A-Za-z][A-Za-z .'-]*?)(?=\s+Flight\s*#2\s*:|$)/i);
+  const explicit=value.match(/Flight\s*#1\s*:\s*([A-Za-z][A-Za-z .'-]*?)(?:\s*\([^)]*\))?\s*>\s*([A-Za-z][A-Za-z .'-]*?)(?:\s*\([^)]*\))?(?=\s+Flight\s*#2\s*:|$)/i);
   if(explicit)return{origin:normalizeAirportPlace(explicit[1]),destination:normalizeAirportPlace(explicit[2])};
   const numbered=value.match(/\bJQ\s*\d{2,4}\s+([A-Za-z][A-Za-z .'-]*?)\s+to\s+([A-Za-z][A-Za-z .'-]*?)(?=\s+\d{1,2}[\/\s]|[.;]|$)/i);
   if(numbered)return{origin:normalizeAirportPlace(numbered[1]),destination:normalizeAirportPlace(numbered[2])};
@@ -39,7 +39,7 @@ function parseJetstarRoute(text){
 }
 function jetstarRoutes(text){
   const value=String(text||''),routes=[];
-  for(const m of value.matchAll(/Flight\s*#(\d+)\s*:\s*([A-Za-z][A-Za-z .'-]*?)(?:\s*\([^)]*\))?\s*>\s*([A-Za-z][A-Za-z .'-]*?)(?=\s+Flight\s*#\d+\s*:|\s+Jetstar\b|\s+International\b|$)/gi)){
+  for(const m of value.matchAll(/Flight\s*#(\d+)\s*:\s*([A-Za-z][A-Za-z .'-]*?)(?:\s*\([^)]*\))?\s*>\s*([A-Za-z][A-Za-z .'-]*?)(?:\s*\([^)]*\))?(?=\s+Flight\s*#\d+\s*:|\s+Jetstar\b|\s+International\b|$)/gi)){
     routes[Number(m[1])-1]={origin:normalizeAirportPlace(m[2]),destination:normalizeAirportPlace(m[3])};
   }
   return routes.filter(Boolean);
