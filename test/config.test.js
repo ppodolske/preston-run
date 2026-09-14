@@ -11,6 +11,8 @@ assert.equal(config.googleCalendarClientSecret,'calendar-secret');
 assert.equal(config.calendarCredentialKey,'calendar-key');
 assert.equal(config.doseScaleContextUrl,'https://dose.preston.run/api/preston/daily-context');
 assert.equal(config.doseScaleServiceToken,'dose-service-token');
+assert.equal(config.gmail.scannerVersion,'gmail-scanner-v0.13.0');
+assert.equal(config.gmail.parserVersion,'gmail-parser-v0.13.0');
 assert.equal(config.isProduction, true);
 assert.equal(Object.hasOwn(config,'vapidPrivateKey'),false);
 assert.equal(Object.hasOwn(config,'supabaseServiceRoleKey'),false);
