@@ -1,5 +1,6 @@
 const assert=require('node:assert/strict');
 const {normalizeGmailMessage,classifyGmailSourceHint,extractGmailMessageText}=require('../src/domain/gmail-normalize');
+const {extractBookingCandidate}=require('../src/domain/gmail-booking-extractor');
 
 const message={
   id:'msg1',threadId:'thr1',labelIds:['CATEGORY_PERSONAL'],internalDate:String(Date.parse('2026-09-13T04:00:00Z')),
@@ -38,4 +39,24 @@ const padded=Buffer.from('Padding works').toString('base64').replace(/\+/g,'-').
 assert.equal(extractGmailMessageText({payload:{mimeType:'text/plain',body:{data:padded}}}),'Padding works');
 assert.equal(extractGmailMessageText({snippet:'Snippet fallback only',payload:{mimeType:'multipart/mixed',parts:[{mimeType:'application/pdf',filename:'a.pdf',body:{attachmentId:'att1'}}]}}),'Snippet fallback only');
 const long=extractGmailMessageText({payload:{mimeType:'text/plain',body:{data:enc('x'.repeat(250000))}}});assert.ok(long.length<=120000,'message text must be bounded');
+
+const oversizedJetstarBody=`Booking reference QNRY8J
+Your flights Booking date: 02 Mar 2026
+Sat 15 Aug 2026 11:50am / 11:50 JQ223
+Sydney (Kingsford Smith) Sat 15 Aug 2026 11:50am / 11:50 Sydney Airport - T1 International
+Queenstown Sat 15 Aug 2026 4:45pm / 16:45 Queenstown Airport
+Sat 22 Aug 2026 5:45pm / 17:45 JQ224
+Queenstown Sat 22 Aug 2026 5:45pm / 17:45 Queenstown Airport
+Sydney (Kingsford Smith) Sat 22 Aug 2026 7:00pm / 19:00 Sydney Airport - T1 International
+${'x'.repeat(130000)}
+International check-in times
+Flight #1: Sydney (Kingsford Smith) > Queenstown
+Flight #2: Queenstown > Sydney (Kingsford Smith)
+Baggage Information`;
+const oversizedJetstarEvidence=extractGmailMessageText({payload:{mimeType:'text/plain',body:{data:enc(oversizedJetstarBody)}}});
+assert.ok(oversizedJetstarEvidence.length<=120000,'oversized Jetstar evidence must remain bounded');
+assert.match(oversizedJetstarEvidence,/Booking reference QNRY8J/,'important head evidence must survive truncation');
+assert.match(oversizedJetstarEvidence,/Flight #2: Queenstown > Sydney/,'important tail route evidence must survive truncation');
+const oversizedJetstar=extractBookingCandidate({sender:'Jetstar <noreplyitineraries@jetstar.com>',subject:'Jetstar Flight Itinerary for (Booking ref# QNRY8J) JQ223 15/08/2026 JQ224 22/08/2026',text:oversizedJetstarEvidence},{parserVersion:'gmail-parser-v0.14.0'});
+assert.deepEqual(oversizedJetstar.candidate.legs.map(x=>x.service_number),['JQ223','JQ224'],'bounded Gmail evidence must retain enough head and tail context to recover both Jetstar legs');
 console.log('gmail normalization tests passed');
