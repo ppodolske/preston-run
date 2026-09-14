@@ -111,6 +111,64 @@ function provider(reads){return{getMessage:async id=>{reads.push(id);return{id,t
   assert.equal(applied.rows.length,5);
   assert.equal(applied.rows.some(row=>row.oldTripId==='anz'),false);
 
+  const clusterTrips={
+    ca:snap('ca','Trip booking REMINDER'),
+    cj:snap('cj','Trip booking EMAIL'),
+    cy:snap('cy','Trip booking 95640384')
+  };
+  const clusterActivities=[
+    {id:'ca1',source_record_id:'s-air',entity_type:'trip',entity_id:'ca',action:'create',automatic:true,rule_version:'gmail-trip-actions-v0.12.0',new_value:clusterTrips.ca},
+    {id:'cj1',source_record_id:'s-jet',entity_type:'trip',entity_id:'cj',action:'create',automatic:true,rule_version:'gmail-trip-actions-v0.12.0',new_value:clusterTrips.cj},
+    {id:'cy1',source_record_id:'s-y2',entity_type:'trip',entity_id:'cy',action:'create',automatic:true,rule_version:'gmail-trip-actions-v0.12.0',new_value:clusterTrips.cy}
+  ];
+  const clusterSources={
+    's-air':{id:'s-air',gmail_message_id:'m-air',gmail_thread_id:'th-air',sender:'Airbnb <automated@airbnb.com>',subject:'Reservation reminder - August 15, 2026',received_at:'2026-08-13T00:00:00Z',source_link:'https://mail.google.com/m-air'},
+    's-jet':{id:'s-jet',gmail_message_id:'m-jet',gmail_thread_id:'th-jet',sender:'Jetstar <noreplyitineraries@jetstar.com>',subject:'Jetstar Flight Itinerary for (Booking ref# QNRY8J) JQ223 15/08/2026 JQ224 22/08/2026',received_at:'2026-08-13T00:00:00Z',source_link:'https://mail.google.com/m-jet'},
+    's-y2':{id:'s-y2',gmail_message_id:'m-y2',gmail_thread_id:'th-y2',sender:'Yonder <info@nowbookit.com>',subject:'Your Reservation at Yonder is coming up',received_at:'2026-08-16T00:00:00Z',source_link:'https://mail.google.com/m-y2'}
+  };
+  const clusterBodies={
+    'm-air':'Reservation reminder for your Queenstown stay. Check-in August 15, 2026.',
+    'm-jet':'Booking ref# QNRY8J. JQ223 Sydney to Queenstown 15/08/2026. JQ224 Queenstown to Sydney 22/08/2026.',
+    'm-y2':'Date: Monday, August 17, 2026. Booking Reference: 95640384. Time: 6:30 PM - 8:00 PM. Location: 14 Church Street, Queenstown, Otago 9300, New Zealand.'
+  };
+  const generatedTrips=[];
+  const clusterData={
+    listLegacyTripCreateActivities:async()=>clusterActivities,
+    getTrip:async id=>clusterTrips[id]||generatedTrips.find(row=>row.id===id)||null,
+    getTripDependencies:async()=>({segments:[],bookings:[],tasks:[],lifeItems:[]}),
+    getSource:async id=>clusterSources[id]||null,
+    listTrips:async()=>[...Object.values(clusterTrips),...generatedTrips],
+    findCanonicalBooking:async()=>null,
+    findLifeItem:async()=>null
+  };
+  const clusterProvider={getMessage:async id=>{const source=Object.values(clusterSources).find(row=>row.gmail_message_id===id);return{id,threadId:source.gmail_thread_id,labelIds:['INBOX'],internalDate:String(Date.parse(source.received_at)),snippet:'',payload:{mimeType:'text/plain',headers:[{name:'From',value:source.sender},{name:'Subject',value:source.subject}],body:{data:enc(clusterBodies[id])}}};}};
+  const clusterDry=await runGmailTripReconstruction({mode:'dry-run',expectedBaseline:3,data:clusterData,provider:clusterProvider,paceMs:0});
+  const jetAnchor=clusterDry.rows.find(row=>row.sourceRecordIds.includes('s-jet'));
+  const airRelated=clusterDry.rows.find(row=>row.sourceRecordIds.includes('s-air'));
+  const yonderRelated=clusterDry.rows.find(row=>row.sourceRecordIds.includes('s-y2'));
+  assert.equal(jetAnchor.tripLinkDecision.kind,'create','round-trip itinerary should anchor the generated Queenstown trip');
+  assert.equal(airRelated.tripLinkDecision.kind,'link','related Queenstown accommodation should plan to link to the anchor trip');
+  assert.equal(airRelated.tripLinkDecision.tripId,'proposed:s-jet');
+  assert.equal(yonderRelated.tripLinkDecision.kind,'link','related Queenstown event should plan to link to the anchor trip');
+  assert.equal(yonderRelated.tripLinkDecision.tripId,'proposed:s-jet');
+
+  const applyOrder=[];
+  await runGmailTripReconstruction({
+    mode:'apply',expectedBaseline:3,data:clusterData,provider:clusterProvider,paceMs:0,
+    bookingActions:{processBooking:async({source,candidate,trips})=>{
+      applyOrder.push(source.id);
+      if(source.id==='s-jet'){
+        const trip={id:'generated-queenstown',title:'Queenstown, New Zealand',status:'planning',start_date:'2026-08-15',end_date:'2026-08-22',destination_label:'Queenstown, New Zealand',destination_city:'Queenstown',destination_region:null,destination_country:'New Zealand',automation_managed:true};
+        generatedTrips.push(trip);
+        return{booking:{id:'booking-jet',trip_id:trip.id,...candidate},created:true,linkDecision:{kind:'create',tripId:null,score:90,reasons:['round_trip_itinerary'],proposedTrip:trip}};
+      }
+      assert.ok(trips.some(row=>row.id==='generated-queenstown'),'anchor trip must exist before related booking apply');
+      return{booking:{id:`booking-${source.id}`,trip_id:'generated-queenstown',...candidate},created:true,linkDecision:{kind:'link',tripId:'generated-queenstown',score:100,reasons:['date_overlap','geography_match'],proposedTrip:null}};
+    }},
+    lifeAdminActions:{createLifeAdminItem:async(source,candidate)=>{applyOrder.push(source.id);assert.ok(generatedTrips.some(row=>row.id==='generated-queenstown'),'anchor trip must exist before related event apply');return{id:'event-y2',linked_trip_id:'generated-queenstown',...candidate};}}
+  });
+  assert.equal(applyOrder[0],'s-jet','strong trip creator must be applied before related source records regardless of shell/source order');
+
   const delays=[];let attempts=0;
   const retried=await withQuotaRetry(async()=>{attempts+=1;if(attempts<3){const error=new Error('403 quota exceeded');error.status=403;throw error;}return'ok';},{sleep:async ms=>delays.push(ms),delays:[15,30,60]});
   assert.equal(retried,'ok');

@@ -21,6 +21,8 @@ assert.deepEqual(classify('Yonder <info@nowbookit.com>','Booking confirmation: Y
 
 assert.equal(classify('Virgin Australia <no-reply@virginaustralia.com>','Your Virgin Australia Travel Reminder','Flight VA123 to Melbourne').intent,'trip');
 assert.equal(classify('Hertz <reservations@emails.hertz.com>','My Hertz Reservation L5920779422').intent,'trip');
+assert.equal(classify('Hertz <reservations@emails.hertz.com>','My Hertz Reservation L5920779422','Confirmation L5920779422. Your vehicle has been reserved. Special offer terms may apply.').intent,'trip','trusted Hertz reservation evidence must outrank incidental marketing footer text');
+assert.equal(classify('Jetstar <noreplyitineraries@jetstar.com>','Jetstar Flight Itinerary for (Booking ref# QNRY8J) JQ223 15/08/2026 JQ224 22/08/2026','Your Flight Itinerary. Booking ref# QNRY8J. Limited time offers are available.').intent,'trip','trusted Jetstar itinerary evidence must outrank incidental marketing footer text');
 assert.equal(classify('DoNotReply@apac.hertz.com','Hertz Car Rental Invoice').intent,'trip','travel-provider invoices must not become Life Admin bills');
 assert.equal(classify('Airbnb <automated@airbnb.com>','Reservation reminder - July 3, 2026').intent,'trip');
 assert.equal(classify('Searoad Ferries <travel@searoad.com.au>','Confirmation for PRESTON - Reference # 4936812').intent,'trip');

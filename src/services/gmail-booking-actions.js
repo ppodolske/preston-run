@@ -7,24 +7,18 @@ const {recordGmailActivity}=require('../data/gmail-sources');
 const {proposeTripLink:proposeTripLinkDefault}=require('../domain/trip-linker');
 
 function bookingInput(candidate={}){
-  return {
-    trip_id:candidate.trip_id||null,
-    segment_id:null,
+  const input={
     position:1,
     booking_type:candidate.booking_type||'other',
     title:candidate.title||'Travel booking',
-    provider:candidate.provider||null,
-    confirmation_reference:candidate.confirmation_reference||null,
     status:candidate.status||'confirmed',
-    starts_at:candidate.starts_at||null,
-    ends_at:candidate.ends_at||null,
-    time_zone:candidate.time_zone||'Australia/Sydney',
-    location:candidate.location||null,
-    origin:candidate.origin||null,
-    destination:candidate.destination||null,
-    booking_url:candidate.booking_url||null,
-    notes:null
+    time_zone:candidate.time_zone||'Australia/Sydney'
   };
+  for(const field of ['trip_id','provider','confirmation_reference','starts_at','ends_at','location','origin','destination','booking_url','notes']){
+    const value=candidate[field];
+    if(value!==null&&value!==undefined&&String(value).trim()!=='')input[field]=value;
+  }
+  return input;
 }
 function extractionMetadata(candidate={},ruleVersion){return{source:'gmail',manual_fields:[],extractor_version:ruleVersion,extraction_confidence:candidate.confidence??null,geography:candidate.geography||null,evidence:Array.isArray(candidate.evidence)?candidate.evidence:[]};}
 function manualTripLock(booking={}){const fields=new Set(Array.isArray(booking.source_metadata&&booking.source_metadata.manual_fields)?booking.source_metadata.manual_fields:[]);return{locked:fields.has('trip_id'),tripId:booking.trip_id||null};}

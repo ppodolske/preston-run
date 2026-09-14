@@ -31,6 +31,14 @@ assert.match(jetstar.candidate.starts_at,/^2026-08-15/);
 assert.match(jetstar.candidate.ends_at,/^2026-08-22/);
 assert.equal(jetstar.candidate.geography.city,'Queenstown');
 
+const jetstarConfirmation=extract({
+  sender:'Jetstar <noreply@jetstar.com>',
+  subject:'Jetstar Booking Confirmation Email',
+  text:'http://www.w3.org/2001/XMLSchema-instance\nBooking reference: QNRY8J\nManage Booking: https://www.jetstar.com/manage/QNRY8J'
+});
+assert.equal(jetstarConfirmation.candidate.confirmation_reference,'QNRY8J','Jetstar confirmation body reference must be retained');
+assert.equal(jetstarConfirmation.candidate.booking_url,'https://www.jetstar.com/manage/QNRY8J','XML namespace URLs must never become booking URLs');
+
 const booking=extract({
   sender:'Booking.com <customer.service@booking.com>',
   subject:'Thanks! Your booking is confirmed at Belle in Bowral',
@@ -46,6 +54,16 @@ assert.equal(booking.candidate.geography.country,'Australia');
 assert.match(booking.candidate.starts_at,/^2026-12-20/);
 assert.match(booking.candidate.ends_at,/^2026-12-22/);
 
+const bookingPolicy=extract({
+  sender:'Booking.com <noreply@booking.com>',
+  subject:'Thanks! Your booking is confirmed at Belle in Bowral',
+  text:'Confirmation: 5072736754. Your holiday home in Bowral is confirmed. Check-in 11 September 2026. Check-out 13 September 2026. Cancellation policy: free cancellation until 8 September.'
+});
+assert.equal(bookingPolicy.candidate.status,'confirmed','a cancellation policy must not mark a confirmed reservation cancelled');
+assert.equal(bookingPolicy.candidate.geography.city,'Bowral','Booking.com property copy should infer Bowral even without a formatted address');
+assert.equal(bookingPolicy.candidate.geography.region,'NSW');
+assert.equal(bookingPolicy.candidate.geography.country,'Australia');
+
 for(const reference of ['L5920779422','L661E0FC0A1']){
   const hertz=extract({sender:'Hertz <reservations@hertz.com>',subject:`My Hertz Reservation ${reference}`,text:`Confirmation ${reference}. Pick-up: Queenstown Airport, 15 August 2026. Return: Queenstown Airport, 22 August 2026.`});
   assert.equal(hertz.candidate.provider,'Hertz');
@@ -53,6 +71,9 @@ for(const reference of ['L5920779422','L661E0FC0A1']){
   assert.equal(hertz.candidate.confirmation_reference,reference,'Hertz confirmation must not be truncated');
   assert.equal(hertz.candidate.geography.city,'Queenstown');
 }
+const hertzReminder=extract({sender:'Hertz <reservations@emails.hertz.com>',subject:'Reminder About Your Upcoming Trip to Queenstown Airport',text:'Confirmation L5920779422. Reminder About Your Upcoming Trip to Queenstown Airport.'});
+assert.equal(hertzReminder.candidate.geography.city,'Queenstown','Hertz reminder prose must not be captured as part of the city');
+assert.equal(hertzReminder.candidate.location,'Queenstown Airport');
 
 const cruise=extract({
   sender:'Cruise Te Anau <notifications@fareharbor.com>',
@@ -72,6 +93,9 @@ const airbnb=extract({sender:'Airbnb <automated@airbnb.com>',subject:'Reservatio
 assert.equal(airbnb.candidate.provider,'Airbnb');
 assert.notEqual(airbnb.candidate.confirmation_reference,'REMINDER');
 assert.equal(airbnb.candidate.confirmation_reference,null);
+
+const uber=extract({sender:'Uber <no-reply@uber.com>',subject:'Reservation confirmed for Saturday 15 August',text:'Reservation confirmed. Pick-up is at 8:30am from 225-227 Denison Road. Cancellation policy applies if you cancel late.'});
+assert.equal(uber.candidate.status,'confirmed','generic cancellation policy text must not override an explicit confirmation');
 
 for(const bad of ['EMAIL','REMINDER','NUMBER','CONFIRMED','DISCOVERY','PRESTON','ERENCE']){
   const generic=extract({sender:'Travel Co <bookings@example.com>',subject:`Booking confirmation ${bad}`,text:`Confirmation reference: ${bad}. Reservation for Bowral on 20 December 2026.`});

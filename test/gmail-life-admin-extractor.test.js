@@ -47,6 +47,17 @@ assert.equal(yonder.location,'14 Church Street, Queenstown, Otago 9300, New Zeal
 assert.equal(yonder.booking_url,'https://bookings.example/yonder/95640384');
 assert.deepEqual(yonder.geography,{label:'Queenstown, Otago',city:'Queenstown',region:'Otago',country:'New Zealand'});
 
+const yonderReminder=extractLifeAdminCandidate({
+  sender:'Yonder <info@nowbookit.com>',
+  subject:'Your Reservation at Yonder is coming up',
+  text:'Dear Preston. This is a booking reminder. Date: Monday, August 17, 2026. Booking Reference: 95640384. Service: Dinner. Time: 6:30 PM - 8:00 PM. Manage Reservation: https://yonderqt.co.nz/'
+},{intent:'life_admin',category:'event',reason:'restaurant_reservation'});
+assert.equal(yonderReminder.title,'Yonder reservation','reminder wording must not become part of the provider/title');
+assert.equal(yonderReminder.provider,'Yonder');
+assert.equal(yonderReminder.location,'Queenstown','known Yonder Queenstown booking evidence should recover event geography');
+assert.equal(yonderReminder.time_zone,'Pacific/Auckland');
+assert.deepEqual(yonderReminder.geography,{label:'Queenstown, Otago',city:'Queenstown',region:'Otago',country:'New Zealand'});
+
 const membership=extractLifeAdminCandidate({sender:'Club <billing@example.com>',subject:'Your annual membership renewal is due 30 September 2026',text:''},{intent:'life_admin',category:'membership',reason:'membership_renewal'});
 assert.equal(membership.category,'membership');
 assert.equal(membership.status,'needs_action');
