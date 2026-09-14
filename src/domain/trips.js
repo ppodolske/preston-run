@@ -4,6 +4,7 @@ const TRIP_STATUSES = ['planning','upcoming','in_progress','completed','cancelle
 const SEGMENT_TYPES = ['travel','stay','activity','other'];
 const BOOKING_TYPES = ['flight','accommodation','hire_car','transport','activity','other'];
 const BOOKING_STATUSES = ['confirmed','tentative','changed','cancelled'];
+const BOOKING_LEG_FIELDS=['service_number','origin','destination','departs_at','arrives_at','departure_time_zone','arrival_time_zone'];
 
 function requiredText(value, label, max = 240) {
   const text = String(value ?? '').trim();
@@ -100,6 +101,25 @@ function validateBookingInput(input = {}) {
   };
 }
 
+function validateBookingLegInput(input={}){
+  const departureZone=String(input.departure_time_zone||'Australia/Sydney').trim();
+  const arrivalZone=String(input.arrival_time_zone||departureZone).trim();
+  if(!isValidTimeZone(departureZone)||!isValidTimeZone(arrivalZone))throw new Error('Time zone is invalid');
+  const departs=localDateTimeToUtc(input.departs_at,departureZone);
+  const arrives=localDateTimeToUtc(input.arrives_at,arrivalZone);
+  if(departs&&arrives&&new Date(arrives)<new Date(departs))throw new Error('Arrival time cannot be before departure time');
+  return {
+    position:positiveInteger(input.position),
+    service_number:optionalText(input.service_number),
+    origin:optionalText(input.origin),
+    destination:optionalText(input.destination),
+    departs_at:departs,
+    arrives_at:arrives,
+    departure_time_zone:departureZone,
+    arrival_time_zone:arrivalZone
+  };
+}
+
 function buildItinerary({ segments = [], bookings = [], events = [] } = {}) {
   const linkedSegmentIds = new Set(bookings.map(b => b.segment_id).filter(Boolean));
   const entries = bookings.map(record => ({type:'booking',record}));
@@ -135,8 +155,8 @@ function getUpcomingTrips(trips = [], today = new Date(), days = 180) {
 }
 
 module.exports = {
-  TRIP_STATUSES, SEGMENT_TYPES, BOOKING_TYPES, BOOKING_STATUSES,
-  validateTripInput, validateSegmentInput, validateBookingInput,
+  TRIP_STATUSES, SEGMENT_TYPES, BOOKING_TYPES, BOOKING_STATUSES, BOOKING_LEG_FIELDS,
+  validateTripInput, validateSegmentInput, validateBookingInput, validateBookingLegInput,
   isValidTimeZone, localDateTimeToUtc, utcToLocalDateTime,
   buildItinerary, getUpcomingTrips
 };
