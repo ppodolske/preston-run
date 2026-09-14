@@ -37,9 +37,12 @@ create table public.booking_source_links (
 create index bookings_user_unlinked_start_idx on public.bookings (user_id, starts_at) where trip_id is null;
 create index bookings_user_provider_reference_idx on public.bookings (user_id, provider, confirmation_reference);
 create index life_items_user_linked_trip_start_idx on public.life_items (user_id, linked_trip_id, starts_at);
+create index life_items_linked_trip_owner_idx on public.life_items (linked_trip_id, user_id);
 create index trips_user_destination_start_idx on public.trips (user_id, destination_country, destination_region, destination_city, start_date);
 create index booking_source_links_user_source_idx on public.booking_source_links (user_id, source_record_id);
 create index booking_source_links_user_booking_idx on public.booking_source_links (user_id, booking_id);
+create index booking_source_links_booking_owner_idx on public.booking_source_links (booking_id, user_id);
+create index booking_source_links_source_owner_idx on public.booking_source_links (source_record_id, user_id);
 
 alter table public.booking_source_links enable row level security;
 
