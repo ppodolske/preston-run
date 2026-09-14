@@ -24,7 +24,7 @@ for(const file of enrichmentFiles){
 }
 
 const tripRoutes=fs.readFileSync(path.join(src,'routes','trips.js'),'utf8');
-assert.equal(/req\.method\s*===\s*['"]GET['"][^\n]*\/(?:archive|unarchive)/.test(tripRoutes),false,'archive mutations must never be GET handlers');
+assert.equal(/req\.method\s*===\s*['"]GET['"]\s*&&\s*(?:archive|unarchive)\b/.test(tripRoutes),false,'archive mutations must never be GET handlers');
 const postGate=tripRoutes.indexOf("if(req.method!=='POST')");
 const archiveHandler=tripRoutes.indexOf("const archive=url.pathname.match(/^\\/trips\\/([^/]+)\\/archive$/)");
 const unarchiveHandler=tripRoutes.indexOf("const unarchive=url.pathname.match(/^\\/trips\\/([^/]+)\\/unarchive$/)");
