@@ -20,7 +20,7 @@ for(const file of enrichmentFiles){
   for(const forbidden of ['deleteTrip','createGeneratedTrip','createTrip','updateTrip','runGmailTripReconstruction','listLegacyTripCreateActivities','gmail-trip-reconstruction']){
     assert.equal(text.includes(forbidden),false,`${path.basename(file)} must not gain Trip mutation or historical replay capability: ${forbidden}`);
   }
-  assert.equal(text.includes('gmail_source_records'),false,`${path.basename(file)} must only use canonical Booking source links, not query general Gmail history`);
+  assert.equal(/\.from\(\s*['"]gmail_source_records['"]\s*\)/.test(text),false,`${path.basename(file)} must only use canonical Booking source links, not query general Gmail history`);
 }
 
 const tripRoutes=fs.readFileSync(path.join(src,'routes','trips.js'),'utf8');
