@@ -64,11 +64,17 @@ International check-in times
 
 Flight #1: Sydney (Kingsford Smith) > Queenstown
 
-Flight #2: Queenstown > Sydney (Kingsford Smith)`
+Flight #2: Queenstown > Sydney (Kingsford Smith)
+
+Baggage Information
+
+Cabin Baggage
+
+Starter fares include a carry-on baggage allowance of one bag and one small personal item.`
 },{parserVersion:'gmail-parser-v0.14.0'});
 
 assert.equal(result.candidate.confirmation_reference,'QNRY8J');
-assert.equal(result.candidate.legs.length,2,'real Jetstar itinerary spacing must produce two legs');
+assert.equal(result.candidate.legs.length,2,'real Jetstar itinerary spacing and trailing sections must produce two legs');
 assert.deepEqual(result.candidate.legs.map(x=>x.service_number),['JQ223','JQ224']);
 assert.equal(result.candidate.legs[0].departs_at,'2026-08-15T01:50:00.000Z');
 assert.equal(result.candidate.legs[0].arrives_at,'2026-08-15T04:45:00.000Z');

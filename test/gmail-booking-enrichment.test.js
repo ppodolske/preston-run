@@ -8,6 +8,42 @@ const links=[
 ];
 const rich={booking_type:'flight',provider:'Jetstar',confirmation_reference:'QNRY8J',title:'Sydney → Queenstown flights',status:'confirmed',starts_at:'2026-08-15T01:50:00.000Z',ends_at:'2026-08-22T05:45:00.000Z',time_zone:'Pacific/Auckland',origin:'Sydney',destination:'Queenstown',location:'Queenstown',booking_url:'https://booking.jetstar.com/mmb',legs:[{position:1,service_number:'JQ223',origin:'Sydney',destination:'Queenstown'},{position:2,service_number:'JQ224',origin:'Queenstown',destination:'Sydney'}]};
 
+const liveJetstarText=`Booking reference
+QNRY8J
+Your flights Booking date: 02 Mar 2026
+Date Flight number Departing Arriving
+Sat 15 Aug 2026
+11:50am / 11:50
+JQ223
+Airbus A320NEO
+Sydney (Kingsford Smith)
+Sat 15 Aug 2026
+11:50am / 11:50
+Sydney Airport - T1 International
+Queenstown
+Sat 15 Aug 2026
+4:45pm / 16:45
+Queenstown Airport
+Date Flight number Departing Arriving
+Sat 22 Aug 2026
+5:45pm / 17:45
+JQ224
+Airbus A320NEO
+Queenstown
+Sat 22 Aug 2026
+5:45pm / 17:45
+Queenstown Airport
+Sydney (Kingsford Smith)
+Sat 22 Aug 2026
+7:00pm / 19:00
+Sydney Airport - T1 International
+International check-in times
+Flight #1: Sydney (Kingsford Smith) > Queenstown
+Flight #2: Queenstown > Sydney (Kingsford Smith)
+Baggage Information
+Cabin Baggage
+Starter fares include a carry-on baggage allowance of one bag and one small personal item.`;
+
 (async()=>{
   const writes=[];
   const base={
@@ -34,5 +70,23 @@ const rich={booking_type:'flight',provider:'Jetstar',confirmation_reference:'QNR
   assert.equal(writes.find(x=>x[0]==='booking')[3].source,'gmail');
 
   await assert.rejects(()=>runGmailBookingEnrichment({...base,mode:'invalid'}),/mode/i);
+
+  const liveBooking={...booking,starts_at:'2026-08-15T00:00:00+00:00',ends_at:'2026-08-22T00:00:00+00:00',origin:'Sydney',destination:'Queenstown',location:'Queenstown'};
+  const liveLinks=[{booking_id:'b1',source_record_id:'s-live',bookings:liveBooking,gmail_source_records:{id:'s-live',gmail_message_id:'m-live',sender:'Jetstar <noreplyitineraries@jetstar.com>',subject:'Jetstar Flight Itinerary for (Booking ref# QNRY8J) JQ223 15/08/2026 JQ224 22/08/2026'}}];
+  const liveDry=await runGmailBookingEnrichment({
+    mode:'dry-run',
+    data:{listBookingSourceLinksForEnrichment:async()=>liveLinks},
+    provider:{getMessage:async()=>({id:'m-live',payload:{mimeType:'text/plain',body:{data:Buffer.from(liveJetstarText).toString('base64url')}},snippet:''})},
+    parserVersion:'gmail-parser-v0.14.0',
+    supabase:{},user:{id:'u1'}
+  });
+  assert.equal(liveDry.results[0].applied,false,'real-path enrichment verification must remain dry-run only');
+  assert.deepEqual(liveDry.results[0].proposed.legs.map(leg=>leg.service_number),['JQ223','JQ224']);
+  assert.deepEqual(liveDry.results[0].proposed.legs.map(leg=>[leg.origin,leg.destination]),[['Sydney','Queenstown'],['Queenstown','Sydney']]);
+  assert.equal(liveDry.results[0].proposed.legs[0].departs_at,'2026-08-15T01:50:00.000Z');
+  assert.equal(liveDry.results[0].proposed.legs[0].arrives_at,'2026-08-15T04:45:00.000Z');
+  assert.equal(liveDry.results[0].proposed.legs[1].departs_at,'2026-08-22T05:45:00.000Z');
+  assert.equal(liveDry.results[0].proposed.legs[1].arrives_at,'2026-08-22T09:00:00.000Z');
+
   console.log('gmail booking enrichment tests passed');
 })().catch(e=>{console.error(e);process.exit(1)});
