@@ -37,6 +37,32 @@ function parseJetstarRoute(text){
   if(numbered)return{origin:normalizeAirportPlace(numbered[1]),destination:normalizeAirportPlace(numbered[2])};
   return firstRoute(value);
 }
+function jetstarRoutes(text){
+  const value=String(text||''),routes=[];
+  for(const m of value.matchAll(/Flight\s*#(\d+)\s*:\s*([A-Za-z][A-Za-z .'-]*?)(?:\s*\([^)]*\))?\s*>\s*([A-Za-z][A-Za-z .'-]*?)(?=\s+Flight\s*#\d+\s*:|\s+Jetstar\b|\s+International\b|$)/gi)){
+    routes[Number(m[1])-1]={origin:normalizeAirportPlace(m[2]),destination:normalizeAirportPlace(m[3])};
+  }
+  return routes.filter(Boolean);
+}
+function placeZone(place){if(/queenstown/i.test(String(place||'')))return'Pacific/Auckland';if(/sydney/i.test(String(place||'')))return'Australia/Sydney';return'Australia/Sydney';}
+function localDateTime(year,monthName,day,time,zone){
+  const m=String(time||'').match(/^(\d{1,2}):(\d{2})(am|pm)$/i);if(!m)return null;
+  const clock=to24(m[1],m[2],m[3]),month=MONTHS[String(monthName||'').toLowerCase()];if(!clock||!month)return null;
+  const local=`${year}-${String(month).padStart(2,'0')}-${String(Number(day)).padStart(2,'0')}T${String(clock.hour).padStart(2,'0')}:${String(clock.minute).padStart(2,'0')}`;
+  return localDateTimeToUtc(local,zone);
+}
+function parseJetstarLegs(text){
+  const value=String(text||''),routes=jetstarRoutes(value);
+  const rows=[...value.matchAll(/\b(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})\s+(\d{1,2}:\d{2}(?:am|pm))\s+(JQ\d{2,4})\b/gi)];
+  if(!rows.length||routes.length<rows.length)return[];
+  return rows.map((row,index)=>{
+    const route=routes[index];if(!route)return null;
+    const departureZone=placeZone(route.origin),arrivalZone=placeZone(route.destination),segment=value.slice(row.index+row[0].length,rows[index+1]?.index??value.length);
+    const escaped=String(route.destination).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    const arrival=(segment.match(new RegExp(`\\b${escaped}(?:\\s*\\([^)]*\\))?\\s+(\\d{1,2}:\\d{2}(?:am|pm))\\b`,'i'))||[])[1]||null;
+    return {position:index+1,service_number:String(row[5]).toUpperCase(),origin:route.origin,destination:route.destination,departs_at:localDateTime(Number(row[3]),row[2],row[1],row[4],departureZone),arrives_at:arrival?localDateTime(Number(row[3]),row[2],row[1],arrival,arrivalZone):null,departure_time_zone:departureZone,arrival_time_zone:arrivalZone};
+  }).filter(Boolean);
+}
 function statusFromText(text){
   const value=String(text||'');
   const explicit=[
@@ -57,7 +83,7 @@ function bookingUrl(text){
   return urls.find(valid)||null;
 }
 function geography(label,city,region,country){return{label:clean(label),city:clean(city),region:clean(region),country:clean(country)};}
-function baseCandidate(overrides={}){return{booking_type:'other',provider:null,confirmation_reference:null,title:'Travel booking',status:'confirmed',starts_at:null,ends_at:null,time_zone:'Australia/Sydney',location:null,origin:null,destination:null,booking_url:null,geography:geography(null,null,null,null),confidence:0.55,evidence:[],...overrides};}
+function baseCandidate(overrides={}){return{booking_type:'other',provider:null,confirmation_reference:null,title:'Travel booking',status:'confirmed',starts_at:null,ends_at:null,time_zone:'Australia/Sydney',location:null,origin:null,destination:null,booking_url:null,legs:[],geography:geography(null,null,null,null),confidence:0.55,evidence:[],...overrides};}
 function to24(hour,minute,ampm){let h=Number(hour),m=Number(minute);if(!Number.isInteger(h)||!Number.isInteger(m)||m<0||m>59)return null;if(ampm){if(h<1||h>12)return null;const ap=String(ampm).toLowerCase();if(ap==='pm'&&h!==12)h+=12;if(ap==='am'&&h===12)h=0;}else if(h<0||h>23)return null;return{hour:h,minute:m};}
 function hertzDateTime(text,label,zone){
   const value=String(text||''),escaped=String(label).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
@@ -85,8 +111,9 @@ function parseQantas(envelope,text){
 function parseJetstar(envelope,text){
   if(!/jetstar/i.test(`${envelope.sender||''} ${envelope.subject||''}`))return null;
   const ref=normalizeReference((text.match(/\bBooking\s+ref\s*#?\s*([A-Z0-9-]{5,25})\b/i)||[])[1])||explicitReference(text);
-  const dates=parseSlashDates(text);const route=parseJetstarRoute(text);const destination=route&&route.destination;const nz=destination&&/queenstown/i.test(destination);
-  return baseCandidate({booking_type:'flight',provider:'Jetstar',confirmation_reference:ref,title:route?`${route.origin} → ${route.destination} flights`:'Jetstar flight itinerary',status:statusFromText(text),starts_at:dates[0]||null,ends_at:dates[1]||null,time_zone:nz?'Pacific/Auckland':'Australia/Sydney',origin:route&&route.origin,destination,location:destination,booking_url:bookingUrl(text),geography:geography(destination,destination,null,nz?'New Zealand':null),confidence:ref&&dates.length>=2?0.97:0.84,evidence:['provider:jetstar',ref?'reference:explicit':null,dates.length?'dates:parsed':null,route?'route:parsed':null].filter(Boolean)});
+  const dates=parseSlashDates(text),route=parseJetstarRoute(text),legs=parseJetstarLegs(text),destination=route&&route.destination,nz=destination&&/queenstown/i.test(destination);
+  const starts=legs[0]?.departs_at||dates[0]||null,lastLeg=legs.at(-1),ends=(lastLeg&&(lastLeg.arrives_at||lastLeg.departs_at))||dates[1]||null;
+  return baseCandidate({booking_type:'flight',provider:'Jetstar',confirmation_reference:ref,title:route?`${route.origin} → ${route.destination} flights`:'Jetstar flight itinerary',status:statusFromText(text),starts_at:starts,ends_at:ends,time_zone:nz?'Pacific/Auckland':'Australia/Sydney',origin:route&&route.origin,destination,location:destination,booking_url:bookingUrl(text),legs,geography:geography(destination,destination,null,nz?'New Zealand':null),confidence:ref&&(dates.length>=2||legs.length>=2)?0.97:0.84,evidence:['provider:jetstar',ref?'reference:explicit':null,(dates.length||legs.length)?'dates:parsed':null,route?'route:parsed':null,legs.length?'legs:parsed':null].filter(Boolean)});
 }
 function parseBookingCom(envelope,text){
   if(!/booking\.com/i.test(`${envelope.sender||''} ${envelope.subject||''}`))return null;
@@ -139,7 +166,7 @@ function candidateFacts(candidate,envelope,{parserVersion}){
   const facts=[buildFact({...common,factType:'booking.identity',factValue:{provider:candidate.provider,confirmation_reference:candidate.confirmation_reference,booking_type:candidate.booking_type,title:candidate.title}})];
   if(candidate.starts_at||candidate.ends_at)facts.push(buildFact({...common,factType:'booking.schedule',factValue:{starts_at:candidate.starts_at,ends_at:candidate.ends_at,time_zone:candidate.time_zone}}));
   if(candidate.location||candidate.geography?.city)facts.push(buildFact({...common,factType:'booking.location',factValue:{location:candidate.location,geography:candidate.geography}}));
-  if(candidate.origin||candidate.destination)facts.push(buildFact({...common,factType:'booking.transport',factValue:{origin:candidate.origin,destination:candidate.destination}}));
+  if(candidate.origin||candidate.destination||candidate.legs?.length)facts.push(buildFact({...common,factType:'booking.transport',factValue:{origin:candidate.origin,destination:candidate.destination,legs:candidate.legs||[]}}));
   facts.push(buildFact({...common,factType:'booking.status',factValue:{status:candidate.status}}));
   return facts;
 }
@@ -153,4 +180,4 @@ function extractBookingCandidate(envelope={},options={}){
   return{candidate,facts:candidateFacts(candidate,envelope,options)};
 }
 
-module.exports={extractBookingCandidate,normalizeReference,explicitReference,BAD_REFERENCES};
+module.exports={extractBookingCandidate,normalizeReference,explicitReference,BAD_REFERENCES,parseJetstarLegs};
