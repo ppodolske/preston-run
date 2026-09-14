@@ -9,6 +9,7 @@ const MONTHS={january:1,february:2,march:3,april:4,may:5,june:6,july:7,august:8,
 function allText(envelope={}){return [envelope.sender,envelope.subject,envelope.text].filter(Boolean).join('\n');}
 function clean(value){const v=String(value||'').replace(/\s+/g,' ').trim();return v||null;}
 function titleCasePlace(value){return clean(value)?.replace(/\s+Airport$/i,'')||null;}
+function normalizeAirportPlace(value){return clean(value)?.replace(/\s*\([^)]*\)\s*$/,'').replace(/\s+Airport(?:\s*-\s*T\d+\s*International)?$/i,'').trim()||null;}
 function normalizeReference(value){
   const ref=String(value||'').trim().replace(/^[#:\-\s]+|[.,;:]+$/g,'').toUpperCase();
   if(!/^[A-Z0-9][A-Z0-9-]{4,24}$/.test(ref)||BAD_REFERENCES.has(ref))return null;
@@ -28,23 +29,49 @@ function parseSlashDates(text){return [...String(text||'').matchAll(/\b(\d{1,2})
 function parseLongDates(text){return [...String(text||'').matchAll(/\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})\b/gi)].map(m=>dateIso(Number(m[3]),MONTHS[m[2].toLowerCase()],Number(m[1])));}
 function parseMonthFirstDates(text){return [...String(text||'').matchAll(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),\s*(\d{4})\b/gi)].map(m=>dateIso(Number(m[3]),MONTHS[m[1].toLowerCase()],Number(m[2])));}
 function firstRoute(text){const m=String(text||'').match(/\b([A-Z][A-Za-z .'-]{1,40}?)\s+to\s+([A-Z][A-Za-z .'-]{1,40}?)(?=\s+\d{1,2}[\/\s]|\s+on\b|[.;\n]|$)/);return m?{origin:clean(m[1]),destination:clean(m[2])}:null;}
+function parseJetstarRoute(text){
+  const value=String(text||'');
+  const explicit=value.match(/Flight\s*#1\s*:\s*([A-Za-z][A-Za-z .'-]*?)(?:\s*\([^)]*\))?\s*>\s*([A-Za-z][A-Za-z .'-]*?)(?=\s+Flight\s*#2\s*:|$)/i);
+  if(explicit)return{origin:normalizeAirportPlace(explicit[1]),destination:normalizeAirportPlace(explicit[2])};
+  const numbered=value.match(/\bJQ\s*\d{2,4}\s+([A-Za-z][A-Za-z .'-]*?)\s+to\s+([A-Za-z][A-Za-z .'-]*?)(?=\s+\d{1,2}[\/\s]|[.;]|$)/i);
+  if(numbered)return{origin:normalizeAirportPlace(numbered[1]),destination:normalizeAirportPlace(numbered[2])};
+  return firstRoute(value);
+}
 function statusFromText(text){
   const value=String(text||'');
-  const subjectLike=value.split(/\n/,2).join(' ');
-  if(/\b(?:booking|reservation|flight|trip|rental|vehicle)\b[^.\n]{0,60}\b(?:has been|was|is)?\s*(?:cancelled|canceled)\b/i.test(value))return'cancelled';
-  if(/\b(?:cancelled|canceled)\b[^.\n]{0,40}\b(?:booking|reservation|flight|trip|rental)\b/i.test(subjectLike))return'cancelled';
-  return'confirmed';
+  const explicit=[
+    /\b(?:your|this|the)\s+(?:booking|reservation|flight|trip|rental|vehicle)\s+(?:has been|was|is)\s+(?:cancelled|canceled)\b/i,
+    /\b(?:booking|reservation|flight|trip|rental)\s+(?:has been|was|is)\s+(?:cancelled|canceled)\b/i,
+    /\b(?:we|hertz|jetstar|qantas|airbnb)\s+(?:have\s+)?(?:cancelled|canceled)\s+(?:your|the)\s+(?:booking|reservation|flight|trip|rental)\b/i,
+    /\b(?:cancelled|canceled)\s+(?:booking|reservation|flight|trip|rental)\b/i,
+    /\b(?:booking|reservation|flight|trip|rental)\s+(?:cancelled|canceled)\b/i
+  ];
+  return explicit.some(pattern=>pattern.test(value))?'cancelled':'confirmed';
 }
 function bookingUrl(text){
   const value=String(text||'');
-  const contextual=value.match(/(?:manage|modify|view)(?:\s+(?:your|my|the))?\s+(?:booking|reservation|rental|trip)?[^\n]{0,100}?(https?:\/\/[^\s<>"']+)/i);
-  const urls=[...value.matchAll(/https?:\/\/[^\s<>"']+/gi)].map(m=>m[0].replace(/[),.;]+$/,''));
-  const valid=url=>url&&!/\b(?:www\.)?w3\.org\/2001\/XMLSchema|schemas\.microsoft\.com/i.test(url);
-  if(contextual&&valid(contextual[1]))return contextual[1].replace(/[),.;]+$/,'');
+  const preferred=value.match(/(?:manage|modify)(?:\s+(?:your|my|the))?\s+(?:booking|reservation|rental|trip)[^\n]{0,120}?(https?:\/\/[^\s<>"']+)/i)||value.match(/view(?:\s+(?:your|my|the))\s+(?:booking|reservation|rental|trip)[^\n]{0,120}?(https?:\/\/[^\s<>"']+)/i);
+  const urls=[...value.matchAll(/https?:\/\/[^\s<>"']+/gi)].map(m=>m[0].replace(/[\]\),.;]+$/,''));
+  const valid=url=>url&&!/\b(?:www\.)?w3\.org\/2001\/XMLSchema|schemas\.microsoft\.com/i.test(url)&&!\.(?:png|jpe?g|gif|svg|webp)(?:\?|$)/i.test(url);
+  if(preferred&&valid(preferred[1]))return preferred[1].replace(/[\]\),.;]+$/,'');
   return urls.find(valid)||null;
 }
 function geography(label,city,region,country){return{label:clean(label),city:clean(city),region:clean(region),country:clean(country)};}
 function baseCandidate(overrides={}){return{booking_type:'other',provider:null,confirmation_reference:null,title:'Travel booking',status:'confirmed',starts_at:null,ends_at:null,time_zone:'Australia/Sydney',location:null,origin:null,destination:null,booking_url:null,geography:geography(null,null,null,null),confidence:0.55,evidence:[],...overrides};}
+function to24(hour,minute,ampm){let h=Number(hour),m=Number(minute);if(!Number.isInteger(h)||!Number.isInteger(m)||m<0||m>59)return null;if(ampm){if(h<1||h>12)return null;const ap=String(ampm).toLowerCase();if(ap==='pm'&&h!==12)h+=12;if(ap==='am'&&h===12)h=0;}else if(h<0||h>23)return null;return{hour:h,minute:m};}
+function hertzDateTime(text,label,zone){
+  const value=String(text||''),escaped=String(label).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  let m=value.match(new RegExp(`${escaped}\\s+(?:[A-Za-z]{3,9},\\s*)?([A-Za-z]{3,9})\\s+(\\d{1,2}),\\s*(\\d{4}),?\\s*(?:at\\s*)?(\\d{1,2}):(\\d{2})\\s*(am|pm)?`,'i'));
+  let year,month,day,hour,minute,ampm;
+  if(m){month=MONTHS[m[1].toLowerCase()];day=Number(m[2]);year=Number(m[3]);hour=m[4];minute=m[5];ampm=m[6];}
+  else{
+    m=value.match(new RegExp(`${escaped}\\s+(?:[A-Za-z]{3,9},\\s*)?(\\d{1,2})\\s+([A-Za-z]{3,9}),?\\s*(\\d{4})\\s*(?:at|,)?\\s*(\\d{1,2}):(\\d{2})\\s*(am|pm)?`,'i'));
+    if(!m)return null;day=Number(m[1]);month=MONTHS[m[2].toLowerCase()];year=Number(m[3]);hour=m[4];minute=m[5];ampm=m[6];
+  }
+  const clock=to24(hour,minute,ampm);if(!month||!clock)return null;
+  const local=`${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}T${String(clock.hour).padStart(2,'0')}:${String(clock.minute).padStart(2,'0')}`;
+  return localDateTimeToUtc(local,zone);
+}
 
 function parseQantas(envelope,text){
   if(!/qantas/i.test(`${envelope.sender||''} ${envelope.subject||''}`))return null;
@@ -58,8 +85,8 @@ function parseQantas(envelope,text){
 function parseJetstar(envelope,text){
   if(!/jetstar/i.test(`${envelope.sender||''} ${envelope.subject||''}`))return null;
   const ref=normalizeReference((text.match(/\bBooking\s+ref\s*#?\s*([A-Z0-9-]{5,25})\b/i)||[])[1])||explicitReference(text);
-  const dates=parseSlashDates(text);const route=firstRoute(text);const destination=route&&route.destination;
-  return baseCandidate({booking_type:'flight',provider:'Jetstar',confirmation_reference:ref,title:route?`${route.origin} → ${route.destination} flights`:'Jetstar flight itinerary',status:statusFromText(text),starts_at:dates[0]||null,ends_at:dates[1]||null,origin:route&&route.origin,destination,location:destination,booking_url:bookingUrl(text),geography:geography(destination,destination,null,destination&&/queenstown/i.test(destination)?'New Zealand':null),confidence:ref&&dates.length>=2?0.97:0.84,evidence:['provider:jetstar',ref?'reference:explicit':null,dates.length?'dates:parsed':null,route?'route:parsed':null].filter(Boolean)});
+  const dates=parseSlashDates(text);const route=parseJetstarRoute(text);const destination=route&&route.destination;const nz=destination&&/queenstown/i.test(destination);
+  return baseCandidate({booking_type:'flight',provider:'Jetstar',confirmation_reference:ref,title:route?`${route.origin} → ${route.destination} flights`:'Jetstar flight itinerary',status:statusFromText(text),starts_at:dates[0]||null,ends_at:dates[1]||null,time_zone:nz?'Pacific/Auckland':'Australia/Sydney',origin:route&&route.origin,destination,location:destination,booking_url:bookingUrl(text),geography:geography(destination,destination,null,nz?'New Zealand':null),confidence:ref&&dates.length>=2?0.97:0.84,evidence:['provider:jetstar',ref?'reference:explicit':null,dates.length?'dates:parsed':null,route?'route:parsed':null].filter(Boolean)});
 }
 function parseBookingCom(envelope,text){
   if(!/booking\.com/i.test(`${envelope.sender||''} ${envelope.subject||''}`))return null;
@@ -81,15 +108,15 @@ function parseAirbnb(envelope,text){
 function parseHertz(envelope,text){
   if(!/hertz/i.test(`${envelope.sender||''} ${envelope.subject||''}`))return null;
   const ref=normalizeReference((text.match(/\b(?:Hertz Reservation|Confirmation)\s+([A-Z0-9-]{5,25})\b/i)||[])[1])||explicitReference(text);
-  let city=null;
-  if(/\bQueenstown Airport\b/i.test(text))city='Queenstown';
-  else{
-    const cityMatch=text.match(/\b(?:pick-?up|return|location|rental location)\s*:?\s*([A-Z][A-Za-z .'-]{2,30}?)\s+Airport\b/i);
-    city=cityMatch&&titleCasePlace(cityMatch[1]);
-  }
-  const dates=[...parseLongDates(text),...parseMonthFirstDates(text)].slice(0,2);
-  const nz=city&&/queenstown/i.test(city);
-  return baseCandidate({booking_type:'hire_car',provider:'Hertz',confirmation_reference:ref,title:city?`Hertz car hire · ${city}`:'Hertz car hire',status:statusFromText(text),starts_at:dates[0]||null,ends_at:dates[1]||null,time_zone:nz?'Pacific/Auckland':'Australia/Sydney',location:city?`${city} Airport`:null,booking_url:bookingUrl(text),geography:geography(city,city,null,nz?'New Zealand':null),confidence:ref?0.96:0.78,evidence:['provider:hertz',ref?'reference:explicit':null,city?'geography:parsed':null,dates.length?'dates:parsed':null].filter(Boolean)});
+  const locationMatch=String(text||'').match(/\bPickup\s+Location\s+([A-Z][A-Za-z .'-]{1,40}?)\s+Airport\b/i);
+  let city=locationMatch&&normalizeAirportPlace(locationMatch[1]);
+  if(!city&&/\bQueenstown Airport\b/i.test(text))city='Queenstown';
+  if(!city){const cityMatch=String(text||'').match(/\b(?:pick-?up|return|location|rental location)\s*:?\s*([A-Z][A-Za-z .'-]{2,30}?)\s+Airport\b/i);city=cityMatch&&titleCasePlace(cityMatch[1]);}
+  const queenstown=city&&/^Queenstown$/i.test(city),brisbane=city&&/^Brisbane$/i.test(city);
+  const region=brisbane?'QLD':null,country=queenstown?'New Zealand':brisbane?'Australia':null,zone=queenstown?'Pacific/Auckland':brisbane?'Australia/Brisbane':'Australia/Sydney';
+  const starts=hertzDateTime(text,'Pickup Date & Time',zone),ends=hertzDateTime(text,'Drop-off Date & Time',zone);
+  const fallbackDates=[...parseLongDates(text),...parseMonthFirstDates(text)].slice(0,2);
+  return baseCandidate({booking_type:'hire_car',provider:'Hertz',confirmation_reference:ref,title:city?`Hertz car hire · ${city}`:'Hertz car hire',status:statusFromText(text),starts_at:starts||fallbackDates[0]||null,ends_at:ends||fallbackDates[1]||null,time_zone:zone,location:city?`${city} Airport`:null,booking_url:bookingUrl(text),geography:geography(city&&region?`${city}, ${region}`:city,city,region,country),confidence:ref?0.96:0.78,evidence:['provider:hertz',ref?'reference:explicit':null,city?'geography:parsed':null,(starts||fallbackDates.length)?'dates:parsed':null].filter(Boolean)});
 }
 function parseFareHarbor(envelope,text){
   if(!/fareharbor|cruise te anau|discovery cruise/i.test(`${envelope.sender||''} ${envelope.subject||''} ${text}`))return null;
@@ -97,7 +124,7 @@ function parseFareHarbor(envelope,text){
   const date=(text.match(/\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})\b/i)||[]);
   const times=text.match(/@\s*(\d{1,2}):(\d{2})(am|pm)\s*-\s*(\d{1,2}):(\d{2})(am|pm)/i);
   let starts=null,ends=null;
-  if(date[1]&&times){const y=Number(date[3]),m=MONTHS[date[2].toLowerCase()],d=Number(date[1]);const to24=(h,ampm)=>{let n=Number(h)%12;if(String(ampm).toLowerCase()==='pm')n+=12;return n;};const local=(h,min)=>`${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}T${String(h).padStart(2,'0')}:${min}`;starts=localDateTimeToUtc(local(to24(times[1],times[3]),times[2]),'Pacific/Auckland');ends=localDateTimeToUtc(local(to24(times[4],times[6]),times[5]),'Pacific/Auckland');}
+  if(date[1]&&times){const y=Number(date[3]),m=MONTHS[date[2].toLowerCase()],d=Number(date[1]);const toHour=(h,ampm)=>{let n=Number(h)%12;if(String(ampm).toLowerCase()==='pm')n+=12;return n;};const local=(h,min)=>`${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}T${String(h).padStart(2,'0')}:${min}`;starts=localDateTimeToUtc(local(toHour(times[1],times[3]),times[2]),'Pacific/Auckland');ends=localDateTimeToUtc(local(toHour(times[4],times[6]),times[5]),'Pacific/Auckland');}
   const city=/\bTe Anau\b/i.test(text)?'Te Anau':null;
   return baseCandidate({booking_type:'activity',provider:'Cruise Te Anau',confirmation_reference:ref,title:'Discovery Cruise',status:statusFromText(text),starts_at:starts,ends_at:ends,time_zone:'Pacific/Auckland',location:city,booking_url:bookingUrl(text),geography:geography(city?`${city}, New Zealand`:null,city,null,city?'New Zealand':null),confidence:ref&&starts?0.98:0.85,evidence:['provider:fareharbor',ref?'reference:explicit':null,starts?'schedule:parsed':null,city?'geography:parsed':null].filter(Boolean)});
 }
