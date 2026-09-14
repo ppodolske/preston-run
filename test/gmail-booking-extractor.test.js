@@ -31,6 +31,20 @@ assert.match(jetstar.candidate.starts_at,/^2026-08-15/);
 assert.match(jetstar.candidate.ends_at,/^2026-08-22/);
 assert.equal(jetstar.candidate.geography.city,'Queenstown');
 
+const jetstarProduction=extract({
+  sender:'Jetstar <noreplyitineraries@jetstar.com>',
+  subject:'Jetstar Flight Itinerary for (Booking ref# QNRY8J) JQ223 15/08/2026 JQ224 22/08/2026',
+  text:'Booking reference QNRY8J Your flights Booking date: 02 Mar 2026 Date Flight number Departing Arriving Sat 15 Aug 2026 11:50am JQ223 Sydney (Kingsford Smith) Sydney Airport - T1 International Queenstown 4:45pm Queenstown Airport Sat 22 Aug 2026 5:45pm JQ224 Queenstown Queenstown Airport Sydney (Kingsford Smith) Sydney Airport - T1 International International check-in times Flight #1: Sydney (Kingsford Smith) > Queenstown Flight #2: Queenstown > Sydney (Kingsford Smith) Jetstar conditions of carriage Advice to International Passengers'
+});
+assert.equal(jetstarProduction.candidate.confirmation_reference,'QNRY8J');
+assert.equal(jetstarProduction.candidate.origin,'Sydney');
+assert.equal(jetstarProduction.candidate.destination,'Queenstown');
+assert.equal(jetstarProduction.candidate.geography.city,'Queenstown');
+assert.equal(jetstarProduction.candidate.geography.country,'New Zealand');
+assert.match(jetstarProduction.candidate.starts_at,/^2026-08-15/);
+assert.match(jetstarProduction.candidate.ends_at,/^2026-08-22/);
+assert.doesNotMatch(jetstarProduction.candidate.title,/International Passengers|conditions of carriage/i,'footer prose must never become the flight route');
+
 const jetstarConfirmation=extract({
   sender:'Jetstar <noreply@jetstar.com>',
   subject:'Jetstar Booking Confirmation Email',
@@ -74,6 +88,34 @@ for(const reference of ['L5920779422','L661E0FC0A1']){
 const hertzReminder=extract({sender:'Hertz <reservations@emails.hertz.com>',subject:'Reminder About Your Upcoming Trip to Queenstown Airport',text:'Confirmation L5920779422. Reminder About Your Upcoming Trip to Queenstown Airport.'});
 assert.equal(hertzReminder.candidate.geography.city,'Queenstown','Hertz reminder prose must not be captured as part of the city');
 assert.equal(hertzReminder.candidate.location,'Queenstown Airport');
+
+const hertzBrisbaneProduction=extract({
+  sender:'Hertz <reservations@emails.hertz.com>',
+  subject:'My Hertz Reservation L661E0FC0A1',
+  text:'Confirmation L661E0FC0A1 Thanks Preston Podolske Your vehicle has been reserved. Your Trip Itinerary Pickup Location Brisbane Airport Airport Drive Brisbane, QL AU 4007 Pickup Date & Time Fri, Dec 18, 2026, 3:00 pm Drop-off Location Brisbane Airport Airport Drive Brisbane, QL AU 4007 Drop-off Date & Time Tue, Dec 22, 2026, 10:30 am CHANGES TO RESERVATIONS The original reservation must be cancelled in some circumstances. CANCELLATION: If you wish to cancel your reservation for any reason.'
+});
+assert.equal(hertzBrisbaneProduction.candidate.confirmation_reference,'L661E0FC0A1');
+assert.equal(hertzBrisbaneProduction.candidate.status,'confirmed','Hertz legal cancellation terms must not cancel an active reservation');
+assert.equal(hertzBrisbaneProduction.candidate.location,'Brisbane Airport');
+assert.equal(hertzBrisbaneProduction.candidate.geography.city,'Brisbane');
+assert.equal(hertzBrisbaneProduction.candidate.geography.region,'QLD');
+assert.equal(hertzBrisbaneProduction.candidate.geography.country,'Australia');
+assert.equal(hertzBrisbaneProduction.candidate.time_zone,'Australia/Brisbane');
+assert.equal(hertzBrisbaneProduction.candidate.starts_at,'2026-12-18T05:00:00.000Z');
+assert.equal(hertzBrisbaneProduction.candidate.ends_at,'2026-12-22T00:30:00.000Z');
+
+const hertzQueenstownProduction=extract({
+  sender:'Hertz <reservations@emails.hertz.com>',
+  subject:'My Hertz Reservation L5920779422',
+  text:'Confirmation L5920779422 Your vehicle has been reserved. Your Trip Itinerary Pickup Location Queenstown Airport Airport Avenue Frankton Queenstown, NZ 9371 Pickup Date & Time Sat, 15 Aug, 2026 at 17:00 Drop-off Location Queenstown Airport Airport Avenue Frankton Queenstown, NZ 9371 Drop-off Date & Time Sat, 22 Aug, 2026 at 16:00 Rental Terms and Conditions.'
+});
+assert.equal(hertzQueenstownProduction.candidate.status,'confirmed');
+assert.equal(hertzQueenstownProduction.candidate.location,'Queenstown Airport');
+assert.equal(hertzQueenstownProduction.candidate.geography.city,'Queenstown');
+assert.equal(hertzQueenstownProduction.candidate.geography.country,'New Zealand');
+assert.equal(hertzQueenstownProduction.candidate.time_zone,'Pacific/Auckland');
+assert.equal(hertzQueenstownProduction.candidate.starts_at,'2026-08-15T05:00:00.000Z');
+assert.equal(hertzQueenstownProduction.candidate.ends_at,'2026-08-22T04:00:00.000Z');
 
 const cruise=extract({
   sender:'Cruise Te Anau <notifications@fareharbor.com>',
