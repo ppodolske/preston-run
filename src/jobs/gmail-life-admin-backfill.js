@@ -9,7 +9,7 @@ const {resolveGmailAccessToken}=require('../services/gmail-access-token');
 const {buildGmailLifeAdminActions}=require('../services/gmail-life-admin-actions');
 const {runGmailLifeAdminBackfill,TARGET_SCAN_IDS}=require('../services/gmail-life-admin-backfill');
 
-const BACKFILL_CONFIRMATION='gmail-life-admin-backfill-v0.12.2';
+const BACKFILL_CONFIRMATION='gmail-life-admin-backfill-v0.12.3';
 
 function assertBackfillConfirmation(env=process.env){
   if(String(env.GMAIL_LIFE_ADMIN_BACKFILL_CONFIRM||'')!==BACKFILL_CONFIRMATION){
