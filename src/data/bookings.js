@@ -11,42 +11,14 @@ function normalizeField(key,value){
   if(key==='starts_at'||key==='ends_at')return value||null;
   return value;
 }
-function bookingPayload(input={}){
-  const tripId=optionalText(input.trip_id);
-  return{
-    trip_id:tripId,
-    segment_id:tripId?optionalText(input.segment_id):null,
-    position:Number(input.position||1),
-    booking_type:input.booking_type,
-    title:String(input.title??'').trim(),
-    provider:optionalText(input.provider),
-    confirmation_reference:optionalText(input.confirmation_reference),
-    status:input.status||'confirmed',
-    starts_at:input.starts_at||null,
-    ends_at:input.ends_at||null,
-    time_zone:String(input.time_zone||'Australia/Sydney'),
-    location:optionalText(input.location),
-    origin:optionalText(input.origin),
-    destination:optionalText(input.destination),
-    booking_url:optionalText(input.booking_url),
-    notes:optionalText(input.notes)
-  };
-}
-function mergeManualMetadata(existing={},input={}){
-  const metadata={...(existing||{})};
-  if(!metadata.source)metadata.source='manual';
-  metadata.manual_fields=[...new Set([...(Array.isArray(metadata.manual_fields)?metadata.manual_fields:[]),...manualFields(input)])];
-  return metadata;
-}
+function bookingPayload(input={}){const tripId=optionalText(input.trip_id);return{trip_id:tripId,segment_id:tripId?optionalText(input.segment_id):null,position:Number(input.position||1),booking_type:input.booking_type,title:String(input.title??'').trim(),provider:optionalText(input.provider),confirmation_reference:optionalText(input.confirmation_reference),status:input.status||'confirmed',starts_at:input.starts_at||null,ends_at:input.ends_at||null,time_zone:String(input.time_zone||'Australia/Sydney'),location:optionalText(input.location),origin:optionalText(input.origin),destination:optionalText(input.destination),booking_url:optionalText(input.booking_url),notes:optionalText(input.notes)};}
+function mergeManualMetadata(existing={},input={}){const metadata={...(existing||{})};if(!metadata.source)metadata.source='manual';metadata.manual_fields=[...new Set([...(Array.isArray(metadata.manual_fields)?metadata.manual_fields:[]),...manualFields(input)])];return metadata;}
 
-async function listBookings(supabase,user,filters={}){const uid=requireUser(user);let q=supabase.from('bookings').select('*').eq('user_id',uid);if(filters.tripId)q=q.eq('trip_id',filters.tripId);if(filters.unlinked&&typeof q.is==='function')q=q.is('trip_id',null);q=q.order('position',{ascending:true}).order('starts_at',{ascending:true,nullsFirst:false});const r=await q;if(r.error)throw r.error;return r.data||[];}
+async function listBookings(supabase,user,filters={}){const uid=requireUser(user);const resolved=typeof filters==='string'?{tripId:filters}:(filters||{});let q=supabase.from('bookings').select('*').eq('user_id',uid);if(resolved.tripId)q=q.eq('trip_id',resolved.tripId);if(resolved.unlinked&&typeof q.is==='function')q=q.is('trip_id',null);q=q.order('position',{ascending:true}).order('starts_at',{ascending:true,nullsFirst:false});const r=await q;if(r.error)throw r.error;return r.data||[];}
 async function getBooking(supabase,user,id){const uid=requireUser(user);const r=await supabase.from('bookings').select('*').eq('id',id).eq('user_id',uid).maybeSingle();if(r.error)throw r.error;return r.data||null;}
-async function createBooking(supabase,user,input){const uid=requireUser(user);const r=await supabase.from('bookings').insert({...bookingPayload(input),user_id:uid,source_metadata:{source:'manual',manual_fields:manualFields(input)}}).select('*').single();if(r.error)throw r.error;return r.data;}
+async function createBooking(supabase,user,inputOrTripId,maybeInput){const uid=requireUser(user);const input=typeof inputOrTripId==='string'?{...(maybeInput||{}),trip_id:inputOrTripId}:(inputOrTripId||{});const r=await supabase.from('bookings').insert({...bookingPayload(input),user_id:uid,source_metadata:{source:'manual',manual_fields:manualFields(input)}}).select('*').single();if(r.error)throw r.error;return r.data;}
 async function updateBooking(supabase,user,id,input,{manual=true}={}){const uid=requireUser(user);const existing=await getBooking(supabase,user,id);if(!existing)return null;const metadata=manual?mergeManualMetadata(existing.source_metadata,input):(existing.source_metadata||{});const r=await supabase.from('bookings').update({...bookingPayload(input),source_metadata:metadata,updated_at:new Date().toISOString()}).eq('id',id).eq('user_id',uid).select('*').maybeSingle();if(r.error)throw r.error;return r.data||null;}
-async function updateBookingFromGmail(supabase,user,id,patch={},metadataPatch={}){const uid=requireUser(user);const existing=await getBooking(supabase,user,id);if(!existing)return null;const protectedFields=new Set(Array.isArray(existing.source_metadata&&existing.source_metadata.manual_fields)?existing.source_metadata.manual_fields:[]);const update={};for(const key of BOOKING_FIELDS){if(!Object.hasOwn(patch,key)||protectedFields.has(key))continue;update[key]=normalizeField(key,patch[key]);}
-  if(Object.hasOwn(update,'trip_id')){if(!update.trip_id)update.segment_id=null;else if(!Object.hasOwn(patch,'segment_id'))update.segment_id=null;}
-  const sourceMetadata={...(existing.source_metadata||{}),...metadataPatch};if(!sourceMetadata.source)sourceMetadata.source='gmail';sourceMetadata.manual_fields=[...protectedFields];update.source_metadata=sourceMetadata;update.updated_at=new Date().toISOString();const r=await supabase.from('bookings').update(update).eq('id',id).eq('user_id',uid).select('*').maybeSingle();if(r.error)throw r.error;return r.data||null;}
+async function updateBookingFromGmail(supabase,user,id,patch={},metadataPatch={}){const uid=requireUser(user);const existing=await getBooking(supabase,user,id);if(!existing)return null;const protectedFields=new Set(Array.isArray(existing.source_metadata&&existing.source_metadata.manual_fields)?existing.source_metadata.manual_fields:[]);const update={};for(const key of BOOKING_FIELDS){if(!Object.hasOwn(patch,key)||protectedFields.has(key))continue;update[key]=normalizeField(key,patch[key]);}if(Object.hasOwn(update,'trip_id')){if(!update.trip_id)update.segment_id=null;else if(!Object.hasOwn(patch,'segment_id'))update.segment_id=null;}const sourceMetadata={...(existing.source_metadata||{}),...metadataPatch};if(!sourceMetadata.source)sourceMetadata.source='gmail';sourceMetadata.manual_fields=[...protectedFields];update.source_metadata=sourceMetadata;update.updated_at=new Date().toISOString();const r=await supabase.from('bookings').update(update).eq('id',id).eq('user_id',uid).select('*').maybeSingle();if(r.error)throw r.error;return r.data||null;}
 async function findBookingsByReference(supabase,user,reference){const uid=requireUser(user),ref=optionalText(reference);if(!ref)return[];const r=await supabase.from('bookings').select('*').eq('user_id',uid).eq('confirmation_reference',ref.toUpperCase());if(r.error)throw r.error;return r.data||[];}
 async function deleteBooking(supabase,user,id){const uid=requireUser(user);const r=await supabase.from('bookings').delete().eq('id',id).eq('user_id',uid).select('id').maybeSingle();if(r.error)throw r.error;return Boolean(r.data);}
-
 module.exports={listBookings,getBooking,createBooking,updateBooking,updateBookingFromGmail,findBookingsByReference,deleteBooking,bookingPayload,manualFields,mergeManualMetadata};
