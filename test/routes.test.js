@@ -26,6 +26,22 @@ const config={siteUrl:'https://preston.run',ownerGoogleEmail:'owner@example.com'
   const failingSiteDeps={...siteDeps,listCalendarDashboardData:async()=>{throw new Error('calendar down');}};
   res=fakeRes();await handleSiteRoute({method:'GET',url:'/'},res,{supabase,config,siteDeps:failingSiteDeps});assert.equal(res.status,200);assert.ok(res.body.includes('Calendar data is temporarily unavailable.'));assert.ok(res.body.includes('Birthdays'));assert.ok(res.body.includes('Trips'));
 
+  const travelTrip={id:'qt',title:'Queenstown',status:'upcoming',start_date:'2026-10-01',end_date:'2026-10-08'};
+  let travelCalls=0,travelLoadArgs=null,travelRenderArgs=null;
+  const travelDeps={...siteDeps,
+    listTrips:async()=>[travelTrip,{id:'old',title:'Old',status:'completed',start_date:'2026-01-01',end_date:'2026-01-02'}],
+    getUpcomingTrips:trips=>trips.filter(t=>t.id==='qt'),
+    loadTravelDashboard:async args=>{travelCalls+=1;travelLoadArgs=args;return[{trip:travelTrip,inventory:['Flight'],items:[]}];},
+    renderHomePage:args=>{travelRenderArgs=args;return'<!doctype html><title>travel home</title>';}
+  };
+  res=fakeRes();await handleSiteRoute({method:'GET',url:'/'},res,{supabase,config,siteDeps:travelDeps});
+  assert.equal(res.status,200);assert.equal(travelCalls,1,'home must load travel dashboard once');assert.deepEqual(travelLoadArgs.trips,[travelTrip],'travel dashboard must receive already-filtered upcoming Trips');assert.equal(travelRenderArgs.travelTrips.length,1);assert.equal(travelRenderArgs.travelTrips[0].trip.id,'qt');assert.equal(travelRenderArgs.travelDataUnavailable,false);
+
+  travelCalls=0;travelRenderArgs=null;
+  const travelFailDeps={...travelDeps,loadTravelDashboard:async()=>{travelCalls+=1;throw new Error('travel down');},renderHomePage:args=>{travelRenderArgs=args;return'<!doctype html><title>travel degraded</title>';}};
+  res=fakeRes();await handleSiteRoute({method:'GET',url:'/'},res,{supabase,config,siteDeps:travelFailDeps});
+  assert.equal(res.status,200);assert.equal(travelCalls,1);assert.deepEqual(travelRenderArgs.travelTrips,[]);assert.equal(travelRenderArgs.travelDataUnavailable,true,'travel failure must degrade independently');
+
   let liveFetchCalls=0,calendarArgs=null,renderArgs=null;
   const cachedContext={payload:{schemaVersion:1,plannedWorkouts:[{id:'pw1',date:'2026-09-13',name:'Workout A',sport:'strength'}],actualActivities:[{id:'a1',date:'2026-09-13',name:'Workout A',type:'lift'}]},fetched_at:'2026-09-13T21:15:00Z'};
   const cachedDigest={digest_date:'2026-09-13',status:'good',headline:'Recovery signals look broadly normal.',cards:[],bullets:[],generated_at:'2026-09-13T21:16:00Z'};
