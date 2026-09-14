@@ -57,9 +57,13 @@ const bookings = [
   {id:'b1',segment_id:'s1',position:1,title:'QF flight',booking_type:'flight',status:'confirmed',starts_at:'2026-09-13T00:00:00.000Z'},
   {id:'b2',segment_id:null,position:4,title:'Museum',booking_type:'activity',status:'cancelled',starts_at:'2026-09-14T12:00:00.000Z'}
 ];
-const itinerary = buildItinerary({segments,bookings});
-assert.deepEqual(itinerary.map(x=>[x.type,x.record.id]), [['booking','b1'],['booking','b2'],['segment','s2'],['segment','s3']]);
-assert.equal(itinerary[1].record.status,'cancelled');
+const events=[
+  {id:'e1',category:'event',title:'Dinner at Yonder',status:'upcoming',starts_at:'2026-09-14T09:00:00.000Z',time_zone:'Pacific/Auckland'}
+];
+const itinerary = buildItinerary({segments,bookings,events});
+assert.deepEqual(itinerary.map(x=>[x.type,x.record.id]), [['booking','b1'],['event','e1'],['booking','b2'],['segment','s2'],['segment','s3']]);
+assert.equal(itinerary[1].record.title,'Dinner at Yonder');
+assert.equal(itinerary[2].record.status,'cancelled');
 assert.ok(!itinerary.some(x=>x.type==='segment' && x.record.id==='s1'),'linked segment should be suppressed when bookings exist');
 
 const trips = [
