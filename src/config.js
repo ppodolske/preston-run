@@ -22,8 +22,8 @@ function loadConfig(env = process.env) {
     clientId: String(env.GMAIL_CLIENT_ID || ''),
     clientSecret: String(env.GMAIL_CLIENT_SECRET || ''),
     redirectUri: String(env.GMAIL_REDIRECT_URI || ''),
-    scannerVersion: 'gmail-scanner-v0.12.2',
-    parserVersion: 'gmail-parser-v0.12.2',
+    scannerVersion: 'gmail-scanner-v0.12.3',
+    parserVersion: 'gmail-parser-v0.12.3',
     initialLookbackMonths: 12
   };
   return {
