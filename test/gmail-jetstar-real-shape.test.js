@@ -70,11 +70,11 @@ Cabin Baggage
 
 Starter fares include a carry-on baggage allowance of one bag and one small personal item.`;
 
-const result=extractBookingCandidate({
+const envelope={
   sender:'Jetstar <noreplyitineraries@jetstar.com>',
-  subject:'Jetstar Flight Itinerary for (Booking ref# QNRY8J) JQ223 15/08/2026 JQ224 22/08/2026',
-  text
-},{parserVersion:'gmail-parser-v0.14.0'});
+  subject:'Jetstar Flight Itinerary for (Booking ref# QNRY8J) JQ223 15/08/2026 JQ224 22/08/2026'
+};
+const result=extractBookingCandidate({...envelope,text},{parserVersion:'gmail-parser-v0.14.0'});
 
 assert.equal(result.candidate.confirmation_reference,'QNRY8J');
 assert.equal(result.candidate.legs.length,2,'real Jetstar itinerary spacing and trailing sections must produce two legs');
@@ -123,4 +123,13 @@ assert.equal(spacedDiagnostics.dateRowCount,6);
 assert.equal(spacedDiagnostics.compactMeridiemCount,0);
 assert.equal(spacedDiagnostics.spacedMeridiemCount,6);
 assert.equal(Object.hasOwn(spacedDiagnostics,'text'),false,'diagnostics must never expose Gmail body text');
+
+const withMetadataGap=text
+  .replace('11:50am / 11:50\n\nJQ223','11:50am / 11:50\n\nSchedule details\n\nJQ223')
+  .replace('5:45pm / 17:45\n\nJQ224','5:45pm / 17:45\n\nSchedule details\n\nJQ224');
+const gapResult=extractBookingCandidate({...envelope,text:withMetadataGap},{parserVersion:'gmail-parser-v0.14.0'});
+assert.equal(gapResult.candidate.legs.length,2,'bounded metadata between departure time and JQ service number must not discard Jetstar legs');
+assert.deepEqual(gapResult.candidate.legs.map(x=>x.service_number),['JQ223','JQ224']);
+assert.equal(gapResult.candidate.legs[0].departs_at,'2026-08-15T01:50:00.000Z');
+assert.equal(gapResult.candidate.legs[1].departs_at,'2026-08-22T05:45:00.000Z');
 console.log('real Jetstar shape test passed');
