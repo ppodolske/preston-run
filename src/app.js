@@ -5,6 +5,7 @@ const { handleUatAuth } = require('./auth/uat-basic');
 const { handleAuthRoute } = require('./routes/auth');
 const { handlePeopleRoute } = require('./routes/people');
 const { handleLifeAdminRoute } = require('./routes/life-admin');
+const { handleBookingsRoute } = require('./routes/bookings');
 const { handleTripsRoute } = require('./routes/trips');
 const { handleReminderOverrideRoute } = require('./routes/reminder-overrides');
 const { handleNotificationsRoute } = require('./routes/notifications');
@@ -56,6 +57,7 @@ function createApp(config, dependencies = {}) {
     if (await handleAuthRoute(req, res, context)) return;
     if (await handlePeopleRoute(req, res, context)) return;
     if (await handleLifeAdminRoute(req, res, context)) return;
+    if (await handleBookingsRoute(req, res, context)) return;
     if (await handleTripsRoute(req, res, context)) return;
     if (await handleReminderOverrideRoute(req, res, context)) return;
     if (await handleNotificationsRoute(req, res, context)) return;
