@@ -1,7 +1,8 @@
 'use strict';
 
-const {extractGmailMessageText}=require('../domain/gmail-normalize');
+const {extractGmailMessageText,MAX_GMAIL_MESSAGE_TEXT}=require('../domain/gmail-normalize');
 const {extractBookingCandidate}=require('../domain/gmail-booking-extractor');
+const {jetstarDiagnostics}=require('../domain/gmail-jetstar-diagnostics');
 const {findPdfAttachments,decodeBase64Url,extractNativePdfText}=require('./gmail-pdf');
 
 const ENRICH_FIELDS=['booking_type','title','provider','confirmation_reference','status','starts_at','ends_at','time_zone','location','origin','destination','booking_url','notes'];
@@ -32,7 +33,8 @@ async function envelopeForSource(source,provider,options={}){
   const message=await provider.getMessage(source.gmail_message_id);
   const body=extractGmailMessageText(message);
   const pdf=await pdfEvidence(message,provider,options);
-  return{sourceRecordId:source.id,sender:source.sender||null,subject:source.subject||null,text:[body,message.snippet,...pdf].filter(Boolean).join('\n')};
+  const sourceDiagnostics=/jetstar/i.test(`${source.sender||''} ${source.subject||''}`)?{sourceRecordId:source.id,...jetstarDiagnostics(body,{maxLength:MAX_GMAIL_MESSAGE_TEXT})}:null;
+  return{sourceRecordId:source.id,sender:source.sender||null,subject:source.subject||null,text:[body,message.snippet,...pdf].filter(Boolean).join('\n'),sourceDiagnostics};
 }
 function snapshot(booking={}){return{starts_at:booking.starts_at||null,ends_at:booking.ends_at||null,origin:booking.origin||null,destination:booking.destination||null,location:booking.location||null};}
 
@@ -49,11 +51,15 @@ async function runGmailBookingEnrichment({mode='dry-run',data,provider,parserVer
     for(const source of group.sources){
       const envelope=await envelopeForSource(source,provider,{pdfParse,extractPdfText});
       const extracted=extractCandidate(envelope,{parserVersion});
-      if(extracted&&extracted.candidate)parsed.push({source,candidate:extracted.candidate});
+      if(extracted&&extracted.candidate)parsed.push({source,candidate:extracted.candidate,sourceDiagnostics:envelope.sourceDiagnostics||null});
     }
     parsed.sort((a,b)=>candidateRichness(b.candidate)-candidateRichness(a.candidate));
     const proposed=parsed[0]&&parsed[0].candidate||{};
     const row={bookingId,provider:group.booking.provider||proposed.provider||null,confirmationReference:group.booking.confirmation_reference||proposed.confirmation_reference||null,sourceRecordIds:unique(group.sources.map(s=>s.id)),before:snapshot(group.booking),proposed:{...snapshot(proposed),legs:Array.isArray(proposed.legs)?proposed.legs:[]},applied:false};
+    if(mode==='dry-run'){
+      const sourceDiagnostics=parsed.map(x=>x.sourceDiagnostics).filter(Boolean);
+      if(sourceDiagnostics.length)row.sourceDiagnostics=sourceDiagnostics;
+    }
     if(mode==='apply'&&parsed.length){
       if(!bookingData||typeof bookingData.updateBookingFromGmail!=='function')throw new Error('bookingData.updateBookingFromGmail is required in apply mode');
       if(!bookingLegData||typeof bookingLegData.upsertBookingLegFromGmail!=='function')throw new Error('bookingLegData.upsertBookingLegFromGmail is required in apply mode');

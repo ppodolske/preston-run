@@ -62,6 +62,7 @@ Starter fares include a carry-on baggage allowance of one bag and one small pers
 
   const applied=await runGmailBookingEnrichment({...base,mode:'apply'});
   assert.equal(applied.results[0].applied,true);
+  assert.equal(Object.hasOwn(applied.results[0],'sourceDiagnostics'),false,'diagnostics must remain dry-run only');
   assert.equal(writes.filter(x=>x[0]==='booking').length,1);
   assert.equal(writes.filter(x=>x[0]==='leg').length,2);
   const patch=writes.find(x=>x[0]==='booking')[2];
@@ -87,6 +88,15 @@ Starter fares include a carry-on baggage allowance of one bag and one small pers
   assert.equal(liveDry.results[0].proposed.legs[0].arrives_at,'2026-08-15T04:45:00.000Z');
   assert.equal(liveDry.results[0].proposed.legs[1].departs_at,'2026-08-22T05:45:00.000Z');
   assert.equal(liveDry.results[0].proposed.legs[1].arrives_at,'2026-08-22T09:00:00.000Z');
+  assert.equal(liveDry.results[0].sourceDiagnostics.length,1,'Jetstar dry-run must expose one structural diagnostic per linked source');
+  const diag=liveDry.results[0].sourceDiagnostics[0];
+  assert.equal(diag.sourceRecordId,'s-live');
+  assert.equal(diag.atMaxLength,false);
+  assert.equal(diag.hasJq223,true);assert.equal(diag.hasJq224,true);
+  assert.equal(diag.hasFlight1,true);assert.equal(diag.hasFlight2,true);assert.equal(diag.hasBaggageInformation,true);
+  assert.equal(diag.flightRowCount,2);assert.equal(diag.routeCount,2);
+  assert.ok(diag.textLength>0);
+  assert.equal(Object.hasOwn(diag,'text'),false,'diagnostics must never expose Gmail body text');
 
   console.log('gmail booking enrichment tests passed');
 })().catch(e=>{console.error(e);process.exit(1)});
