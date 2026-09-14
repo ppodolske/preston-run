@@ -64,14 +64,25 @@ async function sourceEnvelope(source,provider,options={}){
 }
 function currentTripDecisionForEvent(existing,candidate,trips){if(existing&&existing.linked_trip_id)return{kind:'link',tripId:existing.linked_trip_id,score:100,reasons:['existing_trip_link'],proposedTrip:null};return proposeTripLink({subjectType:'event',subject:candidate,trips});}
 function hidden(object,key,value){Object.defineProperty(object,key,{value,writable:true,configurable:true,enumerable:false});return object;}
+function isReconstructableBookingCandidate(candidate={}){
+  if(String(candidate.confirmation_reference||'').trim())return true;
+  const geography=candidate.geography||{};
+  return Boolean(String(candidate.provider||'').trim()&&candidate.starts_at&&(String(geography.city||'').trim()||String(geography.country||'').trim()));
+}
 
 async function parseReconstructionSource({source,provider,data,parserVersion,trips=[],paceMs=0,sleep=sleepDefault,pdfParse,extractPdfText,retryDelays}={}){
   const{envelope}=await sourceEnvelope(source,provider,{sleep,pdfParse,extractPdfText,retryDelays}),classification=classifyGmailIntent(envelope);
   let candidateObjectType='none',candidate=null,facts=[],canonical=null,tripLinkDecision={kind:'none',tripId:null,score:0,reasons:['not_reconstructable'],proposedTrip:null};
   if(classification.intent==='trip'){
-    const extracted=extractBookingCandidate(envelope,{parserVersion});candidateObjectType='booking';candidate=extracted.candidate;facts=extracted.facts||[];
-    canonical=typeof data.findCanonicalBooking==='function'?await data.findCanonicalBooking(candidate,source):null;
-    tripLinkDecision=proposeTripLink({subjectType:'booking',subject:{...(canonical||{}),...candidate},trips});
+    const extracted=extractBookingCandidate(envelope,{parserVersion});candidate=extracted.candidate;facts=extracted.facts||[];
+    if(isReconstructableBookingCandidate(candidate)){
+      candidateObjectType='booking';
+      canonical=typeof data.findCanonicalBooking==='function'?await data.findCanonicalBooking(candidate,source):null;
+      tripLinkDecision=proposeTripLink({subjectType:'booking',subject:{...(canonical||{}),...candidate},trips});
+    }else{
+      candidateObjectType='none';
+      tripLinkDecision={kind:'none',tripId:null,score:0,reasons:['insufficient_booking_identity'],proposedTrip:null};
+    }
   }else if(classification.intent==='life_admin'&&['event','appointment'].includes(classification.category)){
     candidateObjectType='event';candidate=extractLifeAdminCandidate(envelope,classification);canonical=typeof data.findLifeItem==='function'?await data.findLifeItem(source):null;tripLinkDecision=currentTripDecisionForEvent(canonical,candidate,trips);
   }else if(classification.intent==='review'){
@@ -162,4 +173,4 @@ async function runGmailTripReconstruction({mode='dry-run',expectedBaseline=EXPEC
   const rows=discovery.shells.map(shell=>mappingRow(shell,sourceResults));return{mode,observedCount:discovery.observedCount,expectedBaseline:discovery.expectedBaseline,baselineMatches:discovery.baselineMatches,warnings:discovery.warnings,distinctSourceCount:sourceIds.length,rows};
 }
 
-module.exports={EXPECTED_LEGACY_SHELL_COUNT,LEGACY_RULE_PREFIX,isLegacyTripCreateActivity,isQuotaError,withQuotaRetry,discoverLegacyTripShells,sourceEnvelope,parseReconstructionSource,planTripAnchors,applyParsedResult,reconstructSource,runGmailTripReconstruction,dependencyReasons,tripChangedSinceCreate,mappingRow};
+module.exports={EXPECTED_LEGACY_SHELL_COUNT,LEGACY_RULE_PREFIX,isLegacyTripCreateActivity,isQuotaError,withQuotaRetry,discoverLegacyTripShells,sourceEnvelope,isReconstructableBookingCandidate,parseReconstructionSource,planTripAnchors,applyParsedResult,reconstructSource,runGmailTripReconstruction,dependencyReasons,tripChangedSinceCreate,mappingRow};
