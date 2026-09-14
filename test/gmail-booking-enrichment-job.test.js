@@ -1,0 +1,11 @@
+const assert=require('node:assert/strict');
+const {APPLY_CONFIRMATION,parseMode,assertApplyConfirmation}=require('../src/jobs/gmail-booking-enrichment');
+assert.equal(parseMode([],{}),'dry-run');
+assert.equal(parseMode(['--dry-run'],{}),'dry-run');
+assert.equal(parseMode(['--apply'],{}),'apply');
+assert.equal(parseMode([],{GMAIL_BOOKING_ENRICHMENT_MODE:'apply'}),'apply');
+assert.throws(()=>parseMode(['--dry-run','--apply'],{}),/either|both/i);
+assert.throws(()=>assertApplyConfirmation('apply',{}),/confirmation/i);
+assert.doesNotThrow(()=>assertApplyConfirmation('apply',{GMAIL_BOOKING_ENRICHMENT_CONFIRM:APPLY_CONFIRMATION}));
+assert.equal(APPLY_CONFIRMATION,'gmail-booking-enrichment-v0.14.0-apply');
+console.log('gmail booking enrichment job tests passed');
