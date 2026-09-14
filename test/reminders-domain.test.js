@@ -35,15 +35,18 @@ assert.equal(isUrgentEntity({priority:'normal',status:'open',overdue:true}),fals
 assert.equal(isUrgentEntity({priority:'urgent',status:'open'}),true);
 assert.equal(isUrgentEntity({priority:'urgent',status:'completed'}),false);
 
-let parts=getSydneyLocalParts(new Date('2026-01-15T20:05:00Z'));
-assert.deepEqual({hour:parts.hour,minute:parts.minute},{hour:7,minute:5});
-parts=getSydneyLocalParts(new Date('2026-06-15T21:05:00Z'));
-assert.deepEqual({hour:parts.hour,minute:parts.minute},{hour:7,minute:5});
-assert.equal(shouldRunScheduledMode('morning',new Date('2026-01-15T20:05:00Z')),true);
-assert.equal(shouldRunScheduledMode('morning',new Date('2026-06-15T21:05:00Z')),true);
-assert.equal(shouldRunScheduledMode('noon',new Date('2026-01-16T01:00:00Z')),true);
-assert.equal(shouldRunScheduledMode('evening',new Date('2026-01-16T07:00:00Z')),true);
-assert.equal(shouldRunScheduledMode('morning',new Date('2026-01-15T20:06:00Z')),false);
+let parts=getSydneyLocalParts(new Date('2026-01-15T20:15:00Z'));
+assert.deepEqual({hour:parts.hour,minute:parts.minute},{hour:7,minute:15});
+parts=getSydneyLocalParts(new Date('2026-06-15T21:15:00Z'));
+assert.deepEqual({hour:parts.hour,minute:parts.minute},{hour:7,minute:15});
+assert.equal(shouldRunScheduledMode('morning',new Date('2026-01-15T20:15:00Z')),true);
+assert.equal(shouldRunScheduledMode('morning',new Date('2026-06-15T21:25:00Z')),true,'Railway startup delay should be tolerated');
+assert.equal(shouldRunScheduledMode('morning',new Date('2026-06-15T21:30:00Z')),false,'grace window must stay bounded');
+assert.equal(shouldRunScheduledMode('morning',new Date('2026-06-15T21:05:00Z')),false,'old 07:05 schedule must be inactive');
+assert.equal(shouldRunScheduledMode('noon',new Date('2026-01-16T01:10:00Z')),true);
+assert.equal(shouldRunScheduledMode('evening',new Date('2026-01-16T07:10:00Z')),true);
+assert.equal(shouldRunScheduledMode('night',new Date('2026-01-16T10:10:00Z')),true);
+assert.equal(shouldRunScheduledMode('night',new Date('2026-06-16T11:15:00Z')),false);
 assert.throws(()=>shouldRunScheduledMode('bogus',new Date()),/mode/i);
 
 console.log('Reminder domain tests passed');

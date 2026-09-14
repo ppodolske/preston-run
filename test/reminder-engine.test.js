@@ -10,6 +10,7 @@ function deps(overrides={}){
     getOccurrence:async()=>null,upsertOccurrence:async(_s,_u,row)=>{const saved={id:'r'+(calls.occurrences.length+1),...row};calls.occurrences.push(saved);return saved;},
     markSent:async()=>{},recordDelivery:async(_s,_u,row)=>{calls.deliveries.push(row);},markSubscriptionFailure:async(_s,_u,id,row)=>{calls.failures.push({id,...row});},
     getCalendarDigest:async()=>{calls.calendar++;return{events:[],attentionNeeded:false};},
+    getMorningDigest:async()=>null,getLatestGmailScan:async()=>null,listGmailReviewItems:async()=>[],
     ...overrides};
 }
 function transport(calls,handler){return{send:async(subscription,payload)=>{calls.sent.push({subscription,payload});if(handler)return handler(subscription,payload);return{statusCode:201};}};}

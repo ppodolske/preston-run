@@ -1,0 +1,10 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const dir=path.join(__dirname,'..','supabase','migrations');
+const file=fs.readdirSync(dir).find(x=>x.endsWith('_v0140_scheduled_sync_calendar.sql'));
+assert.ok(file,'scheduled sync calendar migration required');
+const sql=fs.readFileSync(path.join(dir,file),'utf8');
+assert.match(sql,/alter table public\.reminder_settings[\s\S]*morning_summary_time[\s\S]*default '07:15'/i);
+assert.match(sql,/update public\.reminder_settings[\s\S]*morning_summary_time\s*=\s*'07:15'[\s\S]*morning_summary_time\s*=\s*'07:05'/i);
+console.log('scheduled calendar migration test passed');

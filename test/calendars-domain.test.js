@@ -12,10 +12,13 @@ const {
 function timed(overrides={}){return normalizeCalendarEvent({provider_event_id:'e1',occurrence_key:'o1',title:'Event',all_day:false,starts_at:'2026-09-13T00:00:00Z',ends_at:'2026-09-13T01:00:00Z',status:'confirmed',owner_response:'accepted',...overrides});}
 function allDay(overrides={}){return normalizeCalendarEvent({provider_event_id:'e2',occurrence_key:'o2',title:'All day',all_day:true,start_date:'2026-09-13',end_date:'2026-09-14',status:'confirmed',owner_response:'accepted',...overrides});}
 
-// 06:55 Sydney gate: AEST and AEDT active slots, adjacent DST twin inactive.
+// 06:55 Sydney gate: AEST and AEDT active slots, adjacent DST twin inactive, Railway startup delay tolerated.
 assert.equal(shouldRunCalendarSync(new Date('2026-07-01T20:55:00Z')),true); // 06:55 AEST
+assert.equal(shouldRunCalendarSync(new Date('2026-07-01T21:04:00Z')),true,'calendar sync should tolerate a short Railway startup delay');
+assert.equal(shouldRunCalendarSync(new Date('2026-07-01T21:10:00Z')),false,'calendar grace window must stay bounded');
 assert.equal(shouldRunCalendarSync(new Date('2026-07-01T19:55:00Z')),false);
 assert.equal(shouldRunCalendarSync(new Date('2026-01-01T19:55:00Z')),true); // 06:55 AEDT
+assert.equal(shouldRunCalendarSync(new Date('2026-01-01T20:04:00Z')),true);
 assert.equal(shouldRunCalendarSync(new Date('2026-01-01T20:55:00Z')),false);
 
 // Sync retention window is anchored to Sydney local calendar date.
@@ -24,7 +27,7 @@ assert.equal(sync.startDate,'2026-08-14');
 assert.equal(sync.endDate,'2027-09-13');
 assert.ok(new Date(sync.start).getTime()<new Date(sync.end).getTime());
 
-const w=getMorningCalendarWindow(new Date('2026-09-12T21:05:00Z')); // 13 Sep 07:05 Sydney
+const w=getMorningCalendarWindow(new Date('2026-09-12T21:15:00Z')); // 13 Sep 07:15 Sydney
 assert.equal(w.today,'2026-09-13');
 assert.equal(w.tomorrow,'2026-09-14');
 assert.equal(new Intl.DateTimeFormat('en-AU',{timeZone:'Australia/Sydney',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date(w.timedCutoff)),'09:00');
