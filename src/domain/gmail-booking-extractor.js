@@ -53,7 +53,7 @@ function localDateTime(year,monthName,day,time,zone){
 }
 function parseJetstarLegs(text){
   const value=String(text||''),routes=jetstarRoutes(value);
-  const rows=[...value.matchAll(/\b(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})\s+(\d{1,2}:\d{2}(?:am|pm))(?:\s*\/\s*\d{1,2}:\d{2})?\s+(JQ\d{2,4})\b/gi)];
+  const rows=[...value.matchAll(/\b(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})\s+(\d{1,2}:\d{2}(?:am|pm))(?:\s*\/\s*\d{1,2}:\d{2})?(?:(?!\b(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4}\b)[\s\S]){0,64}?\b(JQ\d{2,4})\b/gi)];
   if(!rows.length||routes.length<rows.length)return[];
   return rows.map((row,index)=>{
     const route=routes[index];if(!route)return null;
