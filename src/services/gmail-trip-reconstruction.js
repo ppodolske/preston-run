@@ -14,7 +14,7 @@ function sleepDefault(ms){return new Promise(resolve=>setTimeout(resolve,ms));}
 function same(a,b){return(a??null)===(b??null);}
 function unique(values){return[...new Set(values.filter(Boolean))];}
 function isLegacyTripCreateActivity(row={}){return row.entity_type==='trip'&&row.action==='create'&&row.automatic!==false&&String(row.rule_version||'').startsWith(LEGACY_RULE_PREFIX)&&Boolean(row.entity_id);}
-function isQuotaError(error){const status=Number(error&&(?:error.status||error.statusCode||error.code));return status===403||/\b403\b|quota|rate limit|user-rate/i.test(String(error&&error.message||error||''));}
+function isQuotaError(error){const status=Number(error&&(error.status||error.statusCode||error.code));return status===403||/\b403\b|quota|rate limit|user-rate/i.test(String(error&&error.message||error||''));}
 
 async function withQuotaRetry(fn,{sleep=sleepDefault,delays=[15000,30000,60000]}={}){
   let index=0;
@@ -62,7 +62,6 @@ async function sourceEnvelope(source,provider,options={}){
   const body=extractGmailMessageText(message),attachments=findPdfAttachments(message).map(row=>row.filename).filter(Boolean).join(' '),pdfText=await readPdfText(message,provider,options);
   return{message,envelope:{sourceRecordId:source.id,sender:source.sender||null,subject:source.subject||null,text:combineEvidence(body,message.snippet,attachments,...pdfText)}};
 }
-function sourceMetadataLookup(source={}){return{source_record_id:source.id||null,gmail_message_id:source.gmail_message_id||null,gmail_thread_id:source.gmail_thread_id||null};}
 function currentTripDecisionForEvent(existing,candidate,trips){if(existing&&existing.linked_trip_id)return{kind:'link',tripId:existing.linked_trip_id,score:100,reasons:['existing_trip_link'],proposedTrip:null};return proposeTripLink({subjectType:'event',subject:candidate,trips});}
 
 async function reconstructSource({source,provider,data,mode,parserVersion,bookingActions,lifeAdminActions,shellIds,paceMs=1000,sleep=sleepDefault,pdfParse,extractPdfText,retryDelays}={}){
@@ -99,8 +98,11 @@ function mappingRow(shell,sourceResults){
 async function runGmailTripReconstruction({mode='dry-run',expectedBaseline=EXPECTED_LEGACY_SHELL_COUNT,data,provider,parserVersion='gmail-booking-parser-v0.13.0',bookingActions,lifeAdminActions,paceMs=1000,sleep=sleepDefault,pdfParse,extractPdfText,retryDelays,onProgress}={}){
   if(!['dry-run','apply'].includes(mode))throw new Error('Reconstruction mode must be dry-run or apply');if(!provider||typeof provider.getMessage!=='function')throw new Error('Gmail provider is required');
   const discovery=await discoverLegacyTripShells({data,expectedBaseline}),shellIds=new Set(discovery.shells.map(row=>row.trip.id)),sourceIds=unique(discovery.shells.flatMap(row=>row.sourceRecordIds)),sourceResults=new Map();let index=0;
-  for(const sourceId of sourceIds){const source=await data.getSource(sourceId);if(!source){sourceResults.set(sourceId,{source:null,candidateObjectType:'none',candidate:null,canonicalObjectId:null,tripLinkDecision:{kind:'review',tripId:null,score:0,reasons:['missing_source_record'],proposedTrip:null}});continue;}
-    const result=await reconstructSource({source,provider,data,mode,parserVersion,bookingActions,lifeAdminActions,shellIds,paceMs:index===sourceIds.length-1?0:paceMs,sleep,pdfParse,extractPdfText,retryDelays});sourceResults.set(sourceId,result);index+=1;if(onProgress)await onProgress({processedSources:index,totalSources:sourceIds.length,sourceRecordId:sourceId,candidateObjectType:result.candidateObjectType});}
+  for(const sourceId of sourceIds){
+    const source=await data.getSource(sourceId);
+    if(!source){sourceResults.set(sourceId,{source:null,candidateObjectType:'none',candidate:null,canonicalObjectId:null,tripLinkDecision:{kind:'review',tripId:null,score:0,reasons:['missing_source_record'],proposedTrip:null}});index+=1;continue;}
+    const result=await reconstructSource({source,provider,data,mode,parserVersion,bookingActions,lifeAdminActions,shellIds,paceMs:index===sourceIds.length-1?0:paceMs,sleep,pdfParse,extractPdfText,retryDelays});sourceResults.set(sourceId,result);index+=1;if(onProgress)await onProgress({processedSources:index,totalSources:sourceIds.length,sourceRecordId:sourceId,candidateObjectType:result.candidateObjectType});
+  }
   const rows=discovery.shells.map(shell=>mappingRow(shell,sourceResults));return{mode,observedCount:discovery.observedCount,expectedBaseline:discovery.expectedBaseline,baselineMatches:discovery.baselineMatches,warnings:discovery.warnings,distinctSourceCount:sourceIds.length,rows};
 }
 
