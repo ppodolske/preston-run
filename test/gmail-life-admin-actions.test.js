@@ -28,7 +28,7 @@ const {buildGmailLifeAdminActions}=require('../src/services/gmail-life-admin-act
   assert.equal(reviewCreate[2].category,'other');
   assert.equal(reviewCreate[2].status,'needs_action');
   assert.match(reviewCreate[2].title,/Review Gmail/i);
-  assert.equal(calls.some(c=>c[0]==='reviewLink'&&c[2].sourceRecordId==='src2'&&c[2].reviewItemId==='life1'&&c[2].reviewType==='ambiguous_booking'),true);
+  assert.equal(calls.some(c=>c[0]==='reviewLink'&&c[2].sourceRecordId==='src2'&&c[2].reviewItemId==='life1'&&c[2].reviewType==='confirm_new_item'),true);
   assert.equal(calls.some(c=>c[0]==='activity'&&c[2].entityType==='gmail_review'&&c[2].entityId==='life1'&&c[2].action==='create'),true);
 
   const duplicateCalls=[];
