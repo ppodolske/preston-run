@@ -1,18 +1,24 @@
 'use strict';
 
 const { isOverdue } = require('../domain/life-admin');
+const { utcToLocalDateTime } = require('../domain/date-time');
 const { renderReminderControls, reminderClassForLifeItem } = require('./reminder-controls');
 const { renderShell, escapeHtml: esc } = require('../ui/shell');
 const { buttonLink, statusChip, emptyState, flashMessage, card, label } = require('../ui/components');
 const { textField, selectField, dateField, textareaField } = require('../ui/forms');
 
+const TIME_ZONES=['Australia/Sydney','Australia/Adelaide','Australia/Darwin','Australia/Perth','Pacific/Auckland','America/Chicago','America/New_York','America/Los_Angeles','UTC'];
 function inputDate(v){return v?String(v).slice(0,10):'';}
+function inputLocal(v,z){try{return v?utcToLocalDateTime(v,z||'Australia/Sydney'):'';}catch{return'';}}
 function fmtDate(v){if(!v)return'';try{return new Intl.DateTimeFormat('en-AU',{timeZone:'Australia/Sydney',day:'numeric',month:'short',year:'numeric'}).format(new Date(v));}catch{return'Invalid date';}}
+function fmtLocal(v,z){if(!v)return'';try{return `${utcToLocalDateTime(v,z||'Australia/Sydney').replace('T',' ')} · ${z||'Australia/Sydney'}`;}catch{return fmtDate(v);}}
 function personName(people,id){return people.find(p=>p.id===id)?.name||null;}
 function optionPairs(values){return values.map(v=>[v,label(v)]);}
 function peopleOptions(people){return [['','None'],...people.map(p=>[p.id,p.name])];}
 function lifeOptions(items){return [['','None'],...items.map(i=>[i.id,i.title])];}
 function tripOptions(trips){return [['','None'],...trips.map(t=>[t.id,t.title])];}
+function fieldInput({name,label:text,value='',type='text',required=false,placeholder='',list=''}){return `<div class="field"><label for="${esc(name)}">${esc(text)}</label><input id="${esc(name)}" name="${esc(name)}" type="${esc(type)}" value="${esc(value)}"${required?' required':''}${placeholder?` placeholder="${esc(placeholder)}"`:''}${list?` list="${esc(list)}"`:''}></div>`;}
+function timeZoneList(){return `<datalist id="life-time-zones">${TIME_ZONES.map(z=>`<option value="${esc(z)}"></option>`).join('')}</datalist>`;}
 
 const PRIMARY_FILTERS=[['active','Active'],['needs_action','Needs attention'],['upcoming','Upcoming'],['completed','Completed']];
 const CATEGORY_OPTIONS=[['','All categories'],['renewal','Renewals'],['deadline','Deadlines'],['bill','Bills'],['appointment','Appointments'],['government','Government'],['property','Property'],['subscription','Subscriptions'],['membership','Memberships'],['event','Events'],['other','Other']];
@@ -39,24 +45,34 @@ function renderLifeAdminPage({lifeItems=[],tasks=[],people=[],filter='active',ca
   return renderShell({title:'Life Admin',activeNav:'Life Admin',body});
 }
 
-function renderLifeItemPage({item,linkedTasks=[],person=null}={}){
+function renderLifeItemPage({item,linkedTasks=[],person=null,trip=null}={}){
   if(!item)return renderShell({title:'Life Admin',activeNav:'Life Admin',body:`<h1>Life Admin</h1>${emptyState('Item not found.')}`});
   const tasks=linkedTasks.length?linkedTasks.map(t=>`<div class="row"><div><strong>${esc(t.title)}</strong><div class="meta">${esc(label(t.status))} · ${esc(label(t.priority))}</div></div>${buttonLink({href:`/tasks/${encodeURIComponent(t.id)}/edit`,text:'Edit'})}</div>`).join(''):emptyState('No tasks linked to this item.');
   const rows=[`<div class="row"><span>Priority</span><strong>${esc(label(item.priority))}</strong></div>`];
   if(item.due_at)rows.push(`<div class="row"><span>Due</span><strong>${esc(fmtDate(item.due_at))}</strong></div>`);
-  if(item.starts_at)rows.push(`<div class="row"><span>Starts</span><strong>${esc(fmtDate(item.starts_at))}</strong></div>`);
+  if(item.starts_at)rows.push(`<div class="row"><span>Starts</span><strong>${esc(item.ends_at?fmtLocal(item.starts_at,item.time_zone):fmtDate(item.starts_at))}</strong></div>`);
+  if(item.ends_at)rows.push(`<div class="row"><span>Ends</span><strong>${esc(fmtLocal(item.ends_at,item.time_zone))}</strong></div>`);
+  if(item.location)rows.push(`<div class="row"><span>Location</span><strong>${esc(item.location)}</strong></div>`);
+  if(item.provider)rows.push(`<div class="row"><span>Provider</span><strong>${esc(item.provider)}</strong></div>`);
+  if(item.confirmation_reference)rows.push(`<div class="row"><span>Confirmation</span><strong>${esc(item.confirmation_reference)}</strong></div>`);
   if(person)rows.push(`<div class="row"><span>Person</span><strong>${esc(person.name)}</strong></div>`);
+  if(trip)rows.push(`<div class="row"><span>Trip</span><strong><a href="/trips/${encodeURIComponent(trip.id)}">${esc(trip.title)}</a></strong></div>`);
   if(item.recurrence_rule)rows.push(`<div class="row"><span>Recurrence</span><strong>${esc(item.recurrence_rule)}</strong></div>`);
   const sourceLink=item.source_metadata&&item.source_metadata.source==='gmail'&&item.source_metadata.source_link?buttonLink({href:item.source_metadata.source_link,text:'Open source email'}):'';
-  const body=`<h1>${esc(item.title)}</h1><div class="sub">${esc(label(item.category))} · ${esc(label(item.status))}</div><div class="panel">${rows.join('')}${item.notes?`<div class="notes">${esc(item.notes)}</div>`:''}</div><div class="actions life-detail-actions">${buttonLink({href:`/life-admin/${encodeURIComponent(item.id)}/edit`,text:'Edit item',primary:true})}${buttonLink({href:`/tasks/new?life_item_id=${encodeURIComponent(item.id)}`,text:'Add task'})}${sourceLink}${buttonLink({href:'/life-admin',text:'Back'})}</div><div class="section">Tasks</div><div class="panel">${tasks}</div>`;
+  const bookingLink=item.booking_url?buttonLink({href:item.booking_url,text:'Open booking'}):'';
+  const body=`<h1>${esc(item.title)}</h1><div class="sub">${esc(label(item.category))} · ${esc(label(item.status))}</div><div class="panel">${rows.join('')}${item.notes?`<div class="notes">${esc(item.notes)}</div>`:''}</div><div class="actions life-detail-actions">${buttonLink({href:`/life-admin/${encodeURIComponent(item.id)}/edit`,text:'Edit item',primary:true})}${buttonLink({href:`/tasks/new?life_item_id=${encodeURIComponent(item.id)}`,text:'Add task'})}${bookingLink}${sourceLink}${buttonLink({href:'/life-admin',text:'Back'})}</div><div class="section">Tasks</div><div class="panel">${tasks}</div>`;
   return renderShell({title:item.title,activeNav:'Life Admin',body});
 }
 
-function renderLifeItemFormPage({item={},people=[],mode='create',error=null,reminderSettings={},reminderOverride=null}={}){
+function renderLifeItemFormPage({item={},people=[],trips=[],mode='create',error=null,reminderSettings={},reminderOverride=null}={}){
   const edit=mode==='edit';const action=edit?`/life-admin/${encodeURIComponent(item.id)}`:'/life-admin';
   const reminderControls=renderReminderControls({reminderClass:reminderClassForLifeItem(item),settings:reminderSettings,override:reminderOverride,edit});
-  const fields=`${textField({name:'title',label:'Title',value:item.title||'',maxlength:240,required:true})}<div class="grid2">${selectField({name:'category',label:'Category',value:item.category||'other',options:optionPairs(['renewal','deadline','bill','appointment','government','property','subscription','membership','event','other'])})}${selectField({name:'status',label:'Status',value:item.status||'upcoming',options:optionPairs(['upcoming','needs_action','waiting','completed','ignored'])})}${dateField({name:'due_at',label:'Due date',value:inputDate(item.due_at)})}${dateField({name:'starts_at',label:'Start date',value:inputDate(item.starts_at)})}${selectField({name:'priority',label:'Priority',value:item.priority||'normal',options:optionPairs(['low','normal','high','urgent'])})}${selectField({name:'linked_person_id',label:'Person',value:item.linked_person_id||'',options:peopleOptions(people)})}</div>${textField({name:'recurrence_rule',label:'Recurrence note',value:item.recurrence_rule||'',placeholder:'e.g. annually'})}${textareaField({name:'notes',label:'Notes',value:item.notes||''})}`;
-  const body=`<h1>${edit?'Edit item':'Add item'}</h1><div class="sub">Store the obligation or event here. Tasks stay separate.</div>${error?`<div class="error">${esc(error)}</div>`:''}<form class="editor" method="post" action="${action}">${fields}${reminderControls}<div class="actions"><button class="button primary" type="submit">${edit?'Save changes':'Add item'}</button>${buttonLink({href:'/life-admin',text:'Cancel'})}</div></form>`;
+  const timed=item.category==='event'||item.category==='appointment'||Boolean(item.ends_at||item.time_zone);
+  const zone=item.time_zone||'Australia/Sydney';
+  const startField=timed?fieldInput({name:'starts_at',label:'Starts',value:inputLocal(item.starts_at,zone),type:'datetime-local'}):dateField({name:'starts_at',label:'Start date',value:inputDate(item.starts_at)});
+  const timedFields=timed?`${fieldInput({name:'ends_at',label:'Ends',value:inputLocal(item.ends_at,zone),type:'datetime-local'})}${fieldInput({name:'time_zone',label:'Time zone',value:zone,required:true,list:'life-time-zones'})}${timeZoneList()}`:'';
+  const fields=`${textField({name:'title',label:'Title',value:item.title||'',maxlength:240,required:true})}<div class="grid2">${selectField({name:'category',label:'Category',value:item.category||'other',options:optionPairs(['renewal','deadline','bill','appointment','government','property','subscription','membership','event','other'])})}${selectField({name:'status',label:'Status',value:item.status||'upcoming',options:optionPairs(['upcoming','needs_action','waiting','completed','ignored'])})}${dateField({name:'due_at',label:'Due date',value:inputDate(item.due_at)})}${startField}${selectField({name:'priority',label:'Priority',value:item.priority||'normal',options:optionPairs(['low','normal','high','urgent'])})}${selectField({name:'linked_person_id',label:'Person',value:item.linked_person_id||'',options:peopleOptions(people)})}${selectField({name:'linked_trip_id',label:'Trip',value:item.linked_trip_id||'',options:tripOptions(trips)})}</div>${timedFields}${textField({name:'location',label:'Location',value:item.location||''})}<div class="grid2">${textField({name:'provider',label:'Provider',value:item.provider||''})}${textField({name:'confirmation_reference',label:'Confirmation reference',value:item.confirmation_reference||''})}</div>${fieldInput({name:'booking_url',label:'Booking URL',value:item.booking_url||'',type:'url'})}${textField({name:'recurrence_rule',label:'Recurrence note',value:item.recurrence_rule||'',placeholder:'e.g. annually'})}${textareaField({name:'notes',label:'Notes',value:item.notes||''})}`;
+  const body=`<h1>${edit?'Edit item':'Add item'}</h1><div class="sub">Store the obligation or event here. Events and reservations can be linked to a trip.</div>${error?`<div class="error">${esc(error)}</div>`:''}<form class="editor" method="post" action="${action}">${fields}${reminderControls}<div class="actions"><button class="button primary" type="submit">${edit?'Save changes':'Add item'}</button>${buttonLink({href:'/life-admin',text:'Cancel'})}</div></form>`;
   return renderShell({title:edit?'Edit Life Admin item':'Add Life Admin item',activeNav:'Life Admin',body});
 }
 
