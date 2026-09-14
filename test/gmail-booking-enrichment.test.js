@@ -14,6 +14,7 @@ Your flights Booking date: 02 Mar 2026
 Date Flight number Departing Arriving
 Sat 15 Aug 2026
 11:50am / 11:50
+Flight number
 JQ223
 Airbus A320NEO
 Sydney (Kingsford Smith)
@@ -27,6 +28,7 @@ Queenstown Airport
 Date Flight number Departing Arriving
 Sat 22 Aug 2026
 5:45pm / 17:45
+Flight number
 JQ224
 Airbus A320NEO
 Queenstown
@@ -77,7 +79,7 @@ Starter fares include a carry-on baggage allowance of one bag and one small pers
   const liveDry=await runGmailBookingEnrichment({
     mode:'dry-run',
     data:{listBookingSourceLinksForEnrichment:async()=>liveLinks},
-    provider:{getMessage:async()=>({id:'m-live',payload:{mimeType:'text/plain',body:{data:Buffer.from(liveJetstarText).toString('base64url')}},snippet:''})},
+    provider:{getMessage:async()=>({id:'m-live',payload:{mimeType:'text/html',body:{data:Buffer.from(liveJetstarText).toString('base64url')}},snippet:''})},
     parserVersion:'gmail-parser-v0.14.0',
     supabase:{},user:{id:'u1'}
   });
@@ -95,6 +97,8 @@ Starter fares include a carry-on baggage allowance of one bag and one small pers
   assert.equal(diag.hasJq223,true);assert.equal(diag.hasJq224,true);
   assert.equal(diag.hasFlight1,true);assert.equal(diag.hasFlight2,true);assert.equal(diag.hasBaggageInformation,true);
   assert.equal(diag.flightRowCount,2);assert.equal(diag.routeCount,2);
+  assert.equal(diag.jq223PreviousTimeGapHasNonWhitespace,false,'normalization must remove the Flight number label before diagnostics and extraction');
+  assert.equal(diag.jq224PreviousTimeGapHasNonWhitespace,false,'return row must also normalize to time/service adjacency');
   assert.ok(diag.textLength>0);
   assert.equal(Object.hasOwn(diag,'text'),false,'diagnostics must never expose Gmail body text');
 
