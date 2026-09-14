@@ -1,0 +1,5 @@
+Deployment marker for preston.ai v0.13.0 Gmail reconstruction fidelity hardening.
+
+This file has no runtime behavior. It exists to force Railway's GitHub source integration to ingest the production branch after PR #24 because empty-tree deployment-trigger commits were ignored.
+
+Source merge: 62e2bf3ec545bd601fd142025b838ede52dfbb7b
