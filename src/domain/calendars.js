@@ -32,7 +32,7 @@ function getDashboardCalendarWindow(now=new Date()){
   return{today,tomorrow,startOfToday:localDateTimeToInstant(today).toISOString(),startOfTomorrow:localDateTimeToInstant(tomorrow).toISOString(),timedCutoff:localDateTimeToInstant(tomorrow,9,0,0).toISOString()};
 }
 function shouldRunCalendarSync(now=new Date()){
-  const p=localParts(now,SYDNEY_TZ);return p.hour===6&&p.minute===55;
+  const p=localParts(now,SYDNEY_TZ),minutes=p.hour*60+p.minute,start=6*60+55;return minutes>=start&&minutes<start+15;
 }
 
 function requiredText(value,label){const text=String(value||'').trim();if(!text)throw new Error(`Calendar event ${label} is required`);return text;}
