@@ -1,18 +1,19 @@
 const assert=require('node:assert/strict');
 const {renderTripsPage,renderTripDetailPage,renderTripFormPage,renderSegmentFormPage,renderBookingFormPage}=require('../src/pages/trips');
 
-const trips=[{id:'t1',title:'Chicago & Milwaukee',status:'upcoming',start_date:'2026-10-01',end_date:'2026-10-10',notes:'Family & food'},{id:'t2',title:'<b>Escape</b>',status:'planning',start_date:null,end_date:null}];
+const trips=[{id:'t1',title:'Chicago & Milwaukee',status:'upcoming',start_date:'2026-10-01',end_date:'2026-10-10',destination_label:'Chicago, IL',destination_city:'Chicago',destination_region:'IL',destination_country:'USA',notes:'Family & food'},{id:'t2',title:'<b>Escape</b>',status:'planning',start_date:null,end_date:null}];
 const list=renderTripsPage({trips,upcoming:trips.slice(0,1),flash:'Saved'});
-for(const x of ['Trips','Chicago &amp; Milwaukee','Upcoming','1 Oct 2026','10 Oct 2026','/trips/t1','/trips/new','Saved']) assert.ok(list.includes(x),`list missing ${x}`);
+for(const x of ['Trips','Chicago &amp; Milwaukee','Chicago, IL','Upcoming','1 Oct 2026','10 Oct 2026','/trips/t1','/trips/new','Saved']) assert.ok(list.includes(x),`list missing ${x}`);
 assert.match(list,/href="\/preston\.css"/);
 assert.match(list,/class="site-header"/);
 assert.ok(!list.includes('<b>Escape</b>'),'trip title must be escaped');
 
 const segments=[{id:'s1',trip_id:'t1',position:1,segment_type:'travel',title:'SYD → ORD',origin:'Sydney',destination:'Chicago',starts_at:'2026-10-01T00:00:00.000Z',ends_at:'2026-10-01T14:00:00.000Z',time_zone:'Australia/Sydney'},{id:'s2',trip_id:'t1',position:2,segment_type:'stay',title:'Milwaukee stay',starts_at:'2026-10-03T15:00:00.000Z',ends_at:'2026-10-05T15:00:00.000Z',time_zone:'America/Chicago'}];
 const bookings=[{id:'b1',trip_id:'t1',segment_id:'s1',position:1,booking_type:'flight',title:'Qantas flight',provider:'Qantas',confirmation_reference:'ABC123',status:'confirmed',starts_at:'2026-10-01T00:00:00.000Z',ends_at:'2026-10-01T14:00:00.000Z',time_zone:'Australia/Sydney',location:'ORD',booking_url:'https://example.com'}];
-const itinerary=[{type:'booking',record:bookings[0]},{type:'segment',record:segments[1]}];
-const detail=renderTripDetailPage({trip:trips[0],segments,bookings,itinerary,tasks:[{id:'task1',title:'Book train',status:'open',priority:'high'}]});
-for(const x of ['Chicago &amp; Milwaukee','Next','Itinerary','Qantas flight','Confirmed','Milwaukee stay','Bookings','Book train','/tasks/task1/edit','/tasks/new?trip_id=t1','Add task','/trips/t1/segments/new','/trips/t1/bookings/new','/trips/t1/delete']) assert.ok(detail.includes(x),`detail missing ${x}`);
+const events=[{id:'e1',linked_trip_id:'t1',category:'event',title:'Dinner at Yonder',status:'upcoming',starts_at:'2026-10-02T08:00:00.000Z',ends_at:'2026-10-02T10:00:00.000Z',time_zone:'America/Chicago',location:'West Loop',provider:'Yonder'}];
+const itinerary=[{type:'booking',record:bookings[0]},{type:'event',record:events[0]},{type:'segment',record:segments[1]}];
+const detail=renderTripDetailPage({trip:trips[0],segments,bookings,events,itinerary,tasks:[{id:'task1',title:'Book train',status:'open',priority:'high'}]});
+for(const x of ['Chicago &amp; Milwaukee','Chicago, IL','Next','Itinerary','Qantas flight','Confirmed','Dinner at Yonder','West Loop','/life-admin/e1','Milwaukee stay','Bookings','Book train','/tasks/task1/edit','/tasks/new?trip_id=t1','Add task','/trips/t1/segments/new','/trips/t1/bookings/new','/trips/t1/delete']) assert.ok(detail.includes(x),`detail missing ${x}`);
 assert.match(detail,/class="next-card"/);
 assert.ok(detail.indexOf('>Next<') < detail.indexOf('>Itinerary<'),'Next must precede Itinerary');
 assert.ok(detail.indexOf('>Itinerary<') < detail.indexOf('>Bookings<'),'Itinerary must precede Bookings');
@@ -23,12 +24,12 @@ assert.match(detail,/<details class="manage-panel">[\s\S]*<summary>Manage trip<\
 assert.ok(detail.includes('Delete trip'));
 assert.ok(!detail.includes('owner@example.com'));
 
-const empty=renderTripDetailPage({trip:trips[0],segments:[],bookings:[],itinerary:[],tasks:[]});
+const empty=renderTripDetailPage({trip:trips[0],segments:[],bookings:[],events:[],itinerary:[],tasks:[]});
 for(const x of ['No itinerary entries yet.','No bookings yet.','No tasks linked to this trip.']) assert.ok(empty.includes(x),`empty state missing ${x}`);
 assert.doesNotMatch(empty,/<div class="section">Segments<\/div>/);
 
-const tripForm=renderTripFormPage({trip:{id:'t1',title:'Chicago',status:'planning',start_date:'2026-10-01',end_date:'2026-10-10',notes:'x'},mode:'edit',reminderSettings:{trip_offsets:[14,7,1]},reminderOverride:null});
-for(const x of ['Edit trip','name="title"','name="status"','name="start_date"','name="end_date"','/trips/t1','Use global defaults','Custom reminders','14, 7, 1']) assert.ok(tripForm.includes(x),`trip form missing ${x}`);
+const tripForm=renderTripFormPage({trip:{id:'t1',title:'Chicago',status:'planning',start_date:'2026-10-01',end_date:'2026-10-10',destination_label:'Chicago, IL',destination_city:'Chicago',destination_region:'IL',destination_country:'USA',notes:'x'},mode:'edit',reminderSettings:{trip_offsets:[14,7,1]},reminderOverride:null});
+for(const x of ['Edit trip','name="title"','name="status"','name="start_date"','name="end_date"','name="destination_label"','name="destination_city"','name="destination_region"','name="destination_country"','Chicago, IL','USA','/trips/t1','Use global defaults','Custom reminders','14, 7, 1']) assert.ok(tripForm.includes(x),`trip form missing ${x}`);
 assert.match(tripForm,/<label for="title">Title<\/label>/);
 const customTrip=renderTripFormPage({trip:{id:'t1',title:'Chicago',status:'planning'},mode:'edit',reminderSettings:{trip_offsets:[14,7,1]},reminderOverride:{enabled:true,offsets:[30,2]}});assert.match(customTrip,/30, 2/);assert.match(customTrip,/Restore defaults/);
 
