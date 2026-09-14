@@ -65,6 +65,34 @@ const sources=[
   assert.equal(throttled.lifeAdminCreated,1);
   assert.equal(throttleCreates,1);
 
+  let quotaAttempts=0;
+  const quotaSleeps=[];
+  const quotaResult=await runGmailLifeAdminBackfill({
+    sources:[{id:'quota',gmail_message_id:'quota-message',gmail_thread_id:'quota-thread',sender:'HealthShare <no-reply@healthshare.com.au>',subject:'Reminder: Eye Test appointment is coming up',received_at:'2026-09-02T00:00:00Z'}],
+    provider:{getMessage:async()=>{quotaAttempts+=1;if(quotaAttempts<2){const error=new Error('Quota exceeded');error.status=403;error.body={error:{status:'PERMISSION_DENIED',errors:[{reason:'rateLimitExceeded'}]}};throw error;}return{threadId:'quota-thread',snippet:'Appointment 30 September 2026'};}},
+    actions:{createLifeAdminItem:async()=>({id:'life-quota'}),createReviewItem:async()=>({id:'review-quota'})},
+    isAlreadyHandled:async()=>false,
+    retryDelaysMs:[17,29],
+    interMessageDelayMs:0,
+    sleep:async ms=>{quotaSleeps.push(ms);}
+  });
+  assert.equal(quotaAttempts,2,'Gmail 403 rateLimitExceeded should be retried');
+  assert.deepEqual(quotaSleeps,[17]);
+  assert.equal(quotaResult.errors,0);
+
+  let permissionAttempts=0;
+  const permissionResult=await runGmailLifeAdminBackfill({
+    sources:[{id:'forbidden',gmail_message_id:'forbidden-message',gmail_thread_id:'forbidden-thread',sender:'Physio',subject:'Appointment confirmation'}],
+    provider:{getMessage:async()=>{permissionAttempts+=1;const error=new Error('Forbidden');error.status=403;error.body={error:{status:'PERMISSION_DENIED',errors:[{reason:'insufficientPermissions'}]}};throw error;}},
+    actions,
+    isAlreadyHandled:async()=>false,
+    retryDelaysMs:[1,2],
+    interMessageDelayMs:0,
+    sleep:async()=>{}
+  });
+  assert.equal(permissionAttempts,1,'ordinary permission 403s must not be retried');
+  assert.equal(permissionResult.errors,1);
+
   const paceSleeps=[];
   await runGmailLifeAdminBackfill({
     sources:[
@@ -74,10 +102,9 @@ const sources=[
     provider:{getMessage:async id=>({id,threadId:id,snippet:''})},
     actions,
     isAlreadyHandled:async()=>false,
-    interMessageDelayMs:125,
     sleep:async ms=>{paceSleeps.push(ms);}
   });
-  assert.deepEqual(paceSleeps,[125],'backfill should pace Gmail reads between messages');
+  assert.deepEqual(paceSleeps,[1000],'backfill should default to one Gmail message read per second');
 
   console.log('gmail Life Admin backfill tests passed');
 })().catch(error=>{console.error(error);process.exit(1);});
