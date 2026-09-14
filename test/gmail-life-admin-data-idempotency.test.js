@@ -55,6 +55,14 @@ function fakeSupabase(){
   assert.equal(third.item.id,'life2');
   assert.equal(db.rows.length,2);
 
+  const yonderInput={title:'Yonder reservation',category:'event',status:'upcoming',priority:'normal',provider:'Yonder',confirmation_reference:'95640384',starts_at:'2026-08-17T08:30:00.000Z'};
+  const yonderFirst=await ensureGmailLifeItem(db,user,yonderInput,{source_record_id:'src-y1',gmail_message_id:'m-y1',gmail_thread_id:'thread-y1'});
+  assert.equal(yonderFirst.created,true);
+  const yonderReminder=await ensureGmailLifeItem(db,user,{...yonderInput,title:'Yonder reminder'},{source_record_id:'src-y2',gmail_message_id:'m-y2',gmail_thread_id:'thread-y2'});
+  assert.equal(yonderReminder.created,false,'same event provider/reference must dedupe even when reminder arrives in a different Gmail thread');
+  assert.equal(yonderReminder.item.id,yonderFirst.item.id);
+  assert.equal(db.rows.filter(row=>row.category==='event'&&row.confirmation_reference==='95640384').length,1);
+
   db.rows[0].title='My manual event title';
   db.rows[0].linked_trip_id='trip-manual';
   db.rows[0].location=null;
@@ -75,7 +83,7 @@ function fakeSupabase(){
   assert.deepEqual(enriched.source_metadata.manual_fields,['title','linked_trip_id']);
   assert.equal(enriched.source_metadata.gmail_message_id,'m-followup');
   assert.equal(enriched.source_metadata.gmail_thread_id,'thread1');
-  assert.equal(db.rows.length,2,'Gmail enrichment must update the existing canonical item rather than insert a duplicate');
+  assert.equal(db.rows.length,3,'Gmail enrichment must update existing canonical items rather than insert duplicates');
 
   console.log('gmail Life Admin data idempotency tests passed');
 })().catch(error=>{console.error(error);process.exit(1);});
