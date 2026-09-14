@@ -2,17 +2,10 @@
 
 const {createBackgroundSupabaseClient,resolveOwnerUserId}=require('../auth/background-supabase');
 const {refreshFitnessContext}=require('../services/fitness-context');
-
-const SYDNEY_TZ='Australia/Sydney';
+const {withinSydneyWindow}=require('../domain/schedule');
 
 function required(env,key){const value=env[key];if(!value)throw new Error(`${key} is required`);return value;}
-function sydneyParts(now=new Date()){
-  const parts=new Intl.DateTimeFormat('en-AU',{timeZone:SYDNEY_TZ,hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(now);
-  const out={};for(const p of parts)if(p.type!=='literal')out[p.type]=Number(p.value);return out;
-}
-function shouldRunFitnessContextSync(now=new Date()){
-  const p=sydneyParts(now);return p.hour===7&&p.minute===15;
-}
+function shouldRunFitnessContextSync(now=new Date()){return withinSydneyWindow(now,7,0,15);}
 function loadFitnessBackgroundConfig(env=process.env){return{
   supabaseUrl:required(env,'SUPABASE_URL'),
   serviceRoleKey:required(env,'SUPABASE_SERVICE_ROLE_KEY'),
