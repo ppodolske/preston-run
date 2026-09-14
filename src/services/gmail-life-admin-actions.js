@@ -30,12 +30,20 @@ function reviewInput(source={},classification={}){
   };
 }
 
+function canonicalReviewType(classification={}){
+  const reason=String(classification.reason||'');
+  if(reason==='resolve_conflict')return 'resolve_conflict';
+  if(reason==='confirm_match')return 'confirm_match';
+  if(reason==='review_unreadable_source'||reason==='unreadable_source')return 'review_unreadable_source';
+  return 'confirm_new_item';
+}
+
 async function ensureItem(lifeAdminData,supabase,user,input,metadata){
   if(typeof lifeAdminData.ensureGmailLifeItem==='function')return lifeAdminData.ensureGmailLifeItem(supabase,user,input,metadata);
   return {item:await lifeAdminData.createGmailLifeItem(supabase,user,input,metadata),created:true};
 }
 
-function buildGmailLifeAdminActions({supabase,userId,lifeAdminData=lifeAdminDefault,gmailData={recordGmailActivity},reviewData=reviewDefault,ruleVersion='gmail-life-admin-actions-v0.12.2'}={}){
+function buildGmailLifeAdminActions({supabase,userId,lifeAdminData=lifeAdminDefault,gmailData={recordGmailActivity},reviewData=reviewDefault,ruleVersion='gmail-life-admin-actions-v0.12.4'}={}){
   const user={id:userId};
   return {
     async createLifeAdminItem(source,candidate,classification={}){
@@ -55,9 +63,9 @@ function buildGmailLifeAdminActions({supabase,userId,lifeAdminData=lifeAdminDefa
         await reviewData.createGmailReviewLink(supabase,userId,{
           sourceRecordId:source.id,
           reviewItemId:item.id,
-          reviewType:classification.reason||'ambiguous_email',
+          reviewType:canonicalReviewType(classification),
           recommendedAction:'review_email',
-          gmailValue:{sender:source.sender||null,subject:source.subject||null,sourceLink:source.source_link||null}
+          gmailValue:{sender:source.sender||null,subject:source.subject||null,sourceLink:source.source_link||null,classificationReason:classification.reason||null}
         });
       }
       if(gmailData&&typeof gmailData.recordGmailActivity==='function'){
@@ -68,4 +76,4 @@ function buildGmailLifeAdminActions({supabase,userId,lifeAdminData=lifeAdminDefa
   };
 }
 
-module.exports={buildGmailLifeAdminActions,sourceMetadata,reviewInput,ensureItem};
+module.exports={buildGmailLifeAdminActions,sourceMetadata,reviewInput,canonicalReviewType,ensureItem};
