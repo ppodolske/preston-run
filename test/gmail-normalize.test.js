@@ -26,6 +26,17 @@ assert.match(jetstarMultipart,/QNRY8J/,'booking reference present only in the ri
 assert.match(jetstarMultipart,/https:\/\/booking\.jetstar\.com\/mmb/);
 assert.doesNotMatch(jetstarMultipart,/display:none/,'HTML style content must remain stripped');
 
+const jetstarTableLabels=extractGmailMessageText({payload:{mimeType:'text/html',body:{data:enc(`
+  <table>
+    <tr><td>Sat 15 Aug 2026</td><td>11:50am / 11:50</td><th>Flight number</th><td>JQ223</td></tr>
+    <tr><td>Sat 22 Aug 2026</td><td>5:45pm / 17:45</td><th>Flight number</th><td>JQ224</td></tr>
+  </table>
+`)}}});
+assert.match(jetstarTableLabels,/11:50am \/ 11:50 JQ223/,'Jetstar HTML table labels between departure time and service number must be removed');
+assert.match(jetstarTableLabels,/5:45pm \/ 17:45 JQ224/,'Jetstar return row must normalize to parser-compatible time/service adjacency');
+assert.doesNotMatch(jetstarTableLabels,/11:50am \/ 11:50 Flight number JQ223/i);
+assert.doesNotMatch(jetstarTableLabels,/5:45pm \/ 17:45 Flight number JQ224/i);
+
 const duplicateAlternative=extractGmailMessageText({payload:{mimeType:'multipart/alternative',parts:[
   {mimeType:'text/plain',body:{data:enc('Same booking evidence')}},
   {mimeType:'text/html',body:{data:enc('<p>Same booking evidence</p>')}}
