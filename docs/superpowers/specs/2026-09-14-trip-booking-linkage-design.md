@@ -15,7 +15,7 @@ The corrected model is:
 
 A Gmail message is evidence about a real-world booking or event. The booking/event is the primary object. A trip is a higher-level grouping that may contain several bookings, events, itinerary segments, and tasks.
 
-This release will make bookings independently storable, allow both bookings and Life Admin events to link to trips, replace the current Gmail trip-creation path with booking-first ingestion, improve extraction of booking facts such as provider/date/location/reference, and repair the historical Gmail-created trip shells without rerunning the full 523-message backfill.
+This release will make bookings independently storable, allow both bookings and Life Admin events to link to trips, replace the current Gmail trip-creation path with booking-first ingestion, improve extraction of booking facts such as provider/date/location/reference, give trips structured destination geography, and repair the historical Gmail-created trip shells without rerunning the full 523-message backfill.
 
 ## Problem statement
 
@@ -38,7 +38,8 @@ The system therefore loses the useful real-world entity while preserving the con
 - Allow a booking or event to exist without a trip.
 - Allow any booking or event to be linked to an existing trip manually.
 - Allow the Gmail pipeline to suggest or automatically establish a trip link only when confidence is high.
-- Derive trip identity from actual travel geography and dates, not from email wording or booking references.
+- Derive trip identity and destination from actual travel geography and dates, not from email wording or booking references.
+- Store structured trip destination geography independently of the trip title.
 - Keep confirmation numbers, provider references, and Gmail source links on the booking/event.
 - Prevent duplicate objects when reminders, follow-up emails, or repeated scans refer to the same booking.
 - Repair historical Gmail-derived data using only the source records that created the current bad trip shells.
@@ -112,6 +113,8 @@ Recommended fields after migration:
 
 `origin` and `destination` are explicit fields because travel bookings cannot always be represented by a single `location`. Accommodation and activities may primarily use `location`; flights and point-to-point transport should use origin/destination.
 
+A booking may only have a `segment_id` when it also has a `trip_id`. Unlinking a booking from a trip must clear `segment_id` in the same operation. Moving a booking between trips must clear an incompatible segment assignment unless a segment in the destination trip is explicitly selected.
+
 ### Life Admin event
 
 The existing `life_items` table remains the primary home for non-travel Life Admin items, including restaurant reservations and appointments.
@@ -148,18 +151,38 @@ A trip contains or references:
 - trip segments / itinerary
 - linked tasks
 
+A trip also has structured destination geography independent of its display title:
+
+- `destination_label` — human-readable destination such as `Bowral, NSW`, `Queenstown, New Zealand`, or `Australia & New Zealand`
+- `destination_city` — nullable when the trip spans multiple cities
+- `destination_region` — state/province/region where meaningful
+- `destination_country` — country name or stable country representation
+
 Trip identity should be based on:
 
 - actual date range
-- destination geography
+- structured destination geography
 - user-provided title/manual edits
 - existing linked objects
 
-A confirmation number must never determine the trip title.
+A confirmation number must never determine the trip title or destination fields.
 
-Manual trip fields are authoritative. Gmail automation may fill blank values or suggest changes, but it must not overwrite manually edited trip title/dates/location without explicit user action.
+Manual trip fields are authoritative. Gmail automation may fill blank values or suggest changes, but it must not overwrite manually edited trip title, dates, or destination geography without explicit user action.
 
 ## Database changes
+
+### Trips
+
+Add nullable structured destination fields:
+
+- `destination_label text`
+- `destination_city text`
+- `destination_region text`
+- `destination_country text`
+
+These fields are descriptive and must not be derived from confirmation text. Automated values must come from extracted booking/event location evidence.
+
+Add an index suitable for user/date/destination matching. Do not require every trip to have structured geography; existing/manual trips remain valid with null destination fields.
 
 ### Bookings
 
@@ -175,6 +198,12 @@ Add:
 Retain current `location` for venue/property/general place text.
 
 Retain `source_metadata jsonb` and use it for Gmail identity and provenance.
+
+Add a constraint equivalent to:
+
+`segment_id IS NULL OR trip_id IS NOT NULL`
+
+The application must additionally ensure that moving/unlinking a booking cannot leave a segment from the previous trip attached.
 
 Add indexes supporting:
 
@@ -208,7 +237,7 @@ A Gmail-origin booking should be idempotent by stable booking identity, preferri
 
 The system must not treat the Gmail message ID alone as the booking identity when multiple messages describe the same reservation.
 
-A booking may accumulate multiple Gmail source references in `source_metadata` or an associated source-link table if implementation complexity warrants it. The implementation plan should prefer the simplest schema that supports multiple sources without destructive overwrites.
+A booking may accumulate multiple Gmail source references in `source_metadata` or an associated source-link table if implementation complexity warrants it. The implementation plan should prefer the smallest schema that supports multiple sources without destructive overwrites and preserves reliable idempotency.
 
 ## Gmail classification and extraction
 
@@ -318,10 +347,12 @@ Required behaviors:
 - Existing nested “add booking to trip” flow may remain as a convenience and should preselect the trip.
 - Booking form supports origin/destination in addition to location.
 - Booking detail/edit surfaces confirmation reference and Gmail/source link where applicable.
-- Moving a booking between trips changes only `trip_id`; it does not recreate the booking.
-- Unlinking a booking from a trip preserves the booking.
+- Moving a booking between trips changes only `trip_id` plus any required segment cleanup; it does not recreate the booking.
+- Unlinking a booking from a trip preserves the booking and clears `segment_id`.
 
 The Trips page should not be the only way to access bookings. Implementation should add a practical route to review unlinked bookings, either as a dedicated bookings view or a clearly visible unlinked-bookings section within Trips. The implementation plan should choose the simplest UI consistent with the existing application patterns.
+
+Trip create/edit UI should expose destination geography. `destination_label` is the primary human-facing field; city/region/country may be directly editable or maintained through the same form depending on the existing form patterns, but the stored structured fields must be inspectable and correctable by the user.
 
 ## Trip linkage engine
 
@@ -345,13 +376,15 @@ Use the actual booking details:
 
 Email sender location, confirmation wording, and booking reference are not trip geography.
 
-Trip display/location should use human-readable destination geography such as:
+Trip destination fields and display should use human-readable destination geography such as:
 
 - Bowral, NSW
 - Queenstown, New Zealand
 - Brisbane, QLD
 
-For multi-location journeys, prefer a user-friendly regional trip name or user-provided title instead of forcing a single city.
+When a high-confidence new trip is created, its structured destination fields must be populated from the extracted booking/event geography. The title may be derived from `destination_label` when no better user-facing title exists, but title text is not the source of truth for geography.
+
+For multi-location journeys, use a user-friendly regional `destination_label` and leave `destination_city` null where a single city would be misleading.
 
 ### Date rules
 
@@ -377,6 +410,7 @@ At minimum, protect manually edited:
 
 - trip title
 - trip dates
+- trip destination label/city/region/country
 - booking title
 - booking trip assignment
 - event trip assignment
@@ -404,6 +438,7 @@ The repair scope is limited to the Gmail source records that created the 28 bad 
    - Gmail source(s)
    - new booking/event ID
    - assigned trip or unlinked state
+   - extracted geography/date evidence
    - reason/confidence
 9. Verify counts and inspect ambiguous cases.
 10. Only after successful verification, delete obsolete Gmail-generated trip shells and their obsolete Gmail create activity in one guarded transaction.
@@ -411,7 +446,7 @@ The repair scope is limited to the Gmail source records that created the 28 bad 
 ### Historical safety rules
 
 - Never delete `ANZ` as part of this repair.
-- Never delete a trip that contains a real booking, segment, task, or manually entered content without explicit review.
+- Never delete a trip that contains a real booking, segment, task, Life Admin event link, or manually entered content without explicit review.
 - The cleanup transaction must abort if the expected bad-shell set has changed since the mapping report was generated.
 - Preserve Gmail source records and extracted evidence needed for auditability.
 - Do not delete the original emails.
@@ -439,6 +474,8 @@ Recommended chronological sections:
 - events
 - linked tasks
 - manage trip
+
+The trip header should display its structured destination label separately from the title/date range when available.
 
 The timeline should show the actual object title, type, time, and relevant origin/destination/location rather than confirmation metadata.
 
@@ -471,9 +508,12 @@ Verify:
 
 - `bookings.trip_id` accepts null.
 - booking ownership FK still works when linked.
+- `segment_id` cannot remain attached to an unlinked booking.
+- moving/unlinking a booking clears or validates segment linkage.
 - `life_items.linked_trip_id` owner-safe FK works.
-- new event detail columns exist.
-- origin/destination columns exist.
+- new Life Admin event detail columns exist.
+- booking origin/destination columns exist.
+- trip destination label/city/region/country columns exist.
 - relevant indexes and constraints exist.
 
 ### Extractor tests
@@ -503,9 +543,10 @@ Verify:
 
 - destination/date match links to an existing trip
 - manual trip assignment is preserved
+- manual trip destination geography is preserved
 - ambiguous matches remain unlinked
-- a booking reference never becomes a trip title
-- trip creation, when allowed, uses geography/date-derived naming
+- a booking reference never becomes a trip title or destination
+- high-confidence generated trip geography comes from booking/event details
 
 ### UI / route tests
 
@@ -514,6 +555,7 @@ Verify:
 - create booking without trip
 - link/unlink booking to trip
 - link/unlink Life Admin event to trip
+- trip create/edit supports structured destination geography
 - trip page renders bookings and linked events
 - unlinked bookings are visible and actionable
 
@@ -527,8 +569,8 @@ Target release is **v0.13.0** because this changes core data relationships and G
 
 Recommended implementation sequence:
 
-1. Schema migration and data-access support for nullable trip linkage.
-2. Booking/Life Admin UI linkage.
+1. Schema migration and data-access support for nullable trip linkage and structured destination geography.
+2. Booking/Life Admin/trip UI linkage and destination editing.
 3. Booking-first Gmail extraction/upsert pipeline.
 4. Trip matcher and review behavior.
 5. Production deploy with new scans using the new behavior.
@@ -547,7 +589,9 @@ The release is complete when all of the following are true:
 - A booking can exist with no trip.
 - A Life Admin event can link to or unlink from any trip.
 - A booking can link to or unlink from any trip.
-- Confirmation references are stored on bookings/events, not used as trip titles.
+- An unlinked booking cannot retain a trip segment.
+- Confirmation references are stored on bookings/events, not used as trip titles or destinations.
+- Trips store structured destination geography derived from actual booking/event details or manual user input.
 - Trip matching uses actual date/location evidence.
 - Repeated/reminder emails are idempotent.
 - The manual `ANZ` trip remains intact.
