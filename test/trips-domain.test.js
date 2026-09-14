@@ -22,8 +22,8 @@ assert.equal(utcToLocalDateTime('2026-12-14T23:00:00.000Z', 'Australia/Sydney'),
 assert.throws(() => localDateTimeToUtc('2026-03-08T02:30', 'America/Chicago'), /local time/i);
 assert.throws(() => localDateTimeToUtc('2026-09-13T10:00', 'Mars/Olympus_Mons'), /time zone/i);
 
-assert.deepEqual(validateTripInput({title:' Midwest trip ',status:'upcoming',start_date:'2026-10-01',end_date:'2026-10-10',notes:' hi '}), {
-  title:'Midwest trip',status:'upcoming',start_date:'2026-10-01',end_date:'2026-10-10',notes:'hi'
+assert.deepEqual(validateTripInput({title:' Midwest trip ',status:'upcoming',start_date:'2026-10-01',end_date:'2026-10-10',destination_label:' Chicago ',destination_city:' Chicago ',destination_region:' IL ',destination_country:' USA ',notes:' hi '}), {
+  title:'Midwest trip',status:'upcoming',start_date:'2026-10-01',end_date:'2026-10-10',destination_label:'Chicago',destination_city:'Chicago',destination_region:'IL',destination_country:'USA',notes:'hi'
 });
 assert.throws(() => validateTripInput({title:'Trip',start_date:'2026-10-10',end_date:'2026-10-01'}), /end date/i);
 assert.throws(() => validateTripInput({title:'Trip',status:'mystery'}), /status/i);
@@ -34,12 +34,19 @@ assert.equal(segment.starts_at,'2026-09-13T00:00:00.000Z');
 assert.equal(segment.ends_at,'2026-09-13T04:00:00.000Z');
 assert.throws(() => validateSegmentInput({title:'Bad',starts_at:'2026-09-13T14:00',ends_at:'2026-09-13T10:00',time_zone:'Australia/Sydney'}), /end/i);
 
-const booking = validateBookingInput({title:'Hotel',booking_type:'accommodation',provider:'Hotel Co',confirmation_reference:'ABC123',status:'confirmed',position:'3',starts_at:'2026-09-14T15:00',ends_at:'2026-09-16T10:00',time_zone:'America/Chicago',location:'Chicago',booking_url:'https://example.com',segment_id:'seg1'});
+const booking = validateBookingInput({trip_id:'trip1',title:'Hotel',booking_type:'accommodation',provider:'Hotel Co',confirmation_reference:'ABC123',status:'confirmed',position:'3',starts_at:'2026-09-14T15:00',ends_at:'2026-09-16T10:00',time_zone:'America/Chicago',location:'Chicago',origin:'ORD',destination:'Downtown Chicago',booking_url:'https://example.com',segment_id:'seg1'});
 assert.equal(booking.position,3);
+assert.equal(booking.trip_id,'trip1');
 assert.equal(booking.segment_id,'seg1');
 assert.equal(booking.provider,'Hotel Co');
+assert.equal(booking.origin,'ORD');
+assert.equal(booking.destination,'Downtown Chicago');
 assert.equal(booking.starts_at,'2026-09-14T20:00:00.000Z');
-assert.throws(() => validateBookingInput({title:'Bad',booking_type:'train'}), /booking type/i);
+const unlinked=validateBookingInput({trip_id:'',title:'Train',booking_type:'transport',status:'confirmed',time_zone:'Australia/Sydney',segment_id:'seg1'});
+assert.equal(unlinked.trip_id,null);
+assert.equal(unlinked.segment_id,null);
+assert.equal(unlinked.booking_type,'transport');
+assert.throws(() => validateBookingInput({title:'Bad',booking_type:'spaceship'}), /booking type/i);
 
 const segments = [
   {id:'s1',position:1,title:'Flight',segment_type:'travel',starts_at:'2026-09-13T00:00:00.000Z'},
