@@ -1,11 +1,8 @@
 'use strict';
 const assert=require('node:assert/strict');
-const {extractBookingCandidate}=require('../src/domain/gmail-booking-extractor');
+const {extractBookingCandidate,jetstarDiagnostics}=require('../src/domain/gmail-booking-extractor');
 
-const result=extractBookingCandidate({
-  sender:'Jetstar <noreplyitineraries@jetstar.com>',
-  subject:'Jetstar Flight Itinerary for (Booking ref# QNRY8J) JQ223 15/08/2026 JQ224 22/08/2026',
-  text:`Booking reference
+const text=`Booking reference
 QNRY8J
 Your flights Booking date: 02 Mar 2026
 Date Flight number Departing Arriving
@@ -70,7 +67,12 @@ Baggage Information
 
 Cabin Baggage
 
-Starter fares include a carry-on baggage allowance of one bag and one small personal item.`
+Starter fares include a carry-on baggage allowance of one bag and one small personal item.`;
+
+const result=extractBookingCandidate({
+  sender:'Jetstar <noreplyitineraries@jetstar.com>',
+  subject:'Jetstar Flight Itinerary for (Booking ref# QNRY8J) JQ223 15/08/2026 JQ224 22/08/2026',
+  text
 },{parserVersion:'gmail-parser-v0.14.0'});
 
 assert.equal(result.candidate.confirmation_reference,'QNRY8J');
@@ -80,4 +82,18 @@ assert.equal(result.candidate.legs[0].departs_at,'2026-08-15T01:50:00.000Z');
 assert.equal(result.candidate.legs[0].arrives_at,'2026-08-15T04:45:00.000Z');
 assert.equal(result.candidate.legs[1].departs_at,'2026-08-22T05:45:00.000Z');
 assert.equal(result.candidate.legs[1].arrives_at,'2026-08-22T09:00:00.000Z');
+
+const diagnostics=jetstarDiagnostics(text,{maxLength:120000});
+assert.equal(diagnostics.textLength,text.length);
+assert.equal(diagnostics.atMaxLength,false);
+assert.equal(diagnostics.hasJq223,true);
+assert.equal(diagnostics.hasJq224,true);
+assert.equal(diagnostics.hasFlight1,true);
+assert.equal(diagnostics.hasFlight2,true);
+assert.equal(diagnostics.hasBaggageInformation,true);
+assert.equal(diagnostics.flightRowCount,2);
+assert.equal(diagnostics.routeCount,2);
+assert.ok(diagnostics.jq223Index>=0&&diagnostics.jq224Index>diagnostics.jq223Index);
+assert.ok(diagnostics.flight1Index>diagnostics.jq224Index&&diagnostics.flight2Index>diagnostics.flight1Index);
+assert.ok(diagnostics.baggageIndex>diagnostics.flight2Index);
 console.log('real Jetstar shape test passed');
