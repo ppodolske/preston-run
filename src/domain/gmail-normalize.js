@@ -63,13 +63,20 @@ function htmlToPlainText(value){
 function normalizeEvidenceText(value){
   return String(value||'').replace(/\u0000/g,' ').replace(/[\t\r\n ]+/g,' ').trim();
 }
+function uniqueEvidence(values){
+  const seen=new Set(),out=[];
+  for(const value of values){const normalized=normalizeEvidenceText(value);if(!normalized||seen.has(normalized))continue;seen.add(normalized);out.push(normalized);}
+  return out;
+}
 
 function extractGmailMessageText(message,{maxLength=MAX_GMAIL_MESSAGE_TEXT}={}){
   const {plain,html}=collectBodyParts(message?.payload||{});
-  const plainText=normalizeEvidenceText(plain.filter(Boolean).join('\n'));
-  const htmlText=plainText?'':normalizeEvidenceText(html.filter(Boolean).map(htmlToPlainText).join('\n'));
+  const evidence=uniqueEvidence([
+    ...plain,
+    ...html.map(htmlToPlainText)
+  ]);
   const fallback=normalizeEvidenceText(message?.snippet||'');
-  const selected=plainText||htmlText||fallback;
+  const selected=evidence.length?evidence.join('\n'):fallback;
   return selected.slice(0,Math.max(0,Number(maxLength)||MAX_GMAIL_MESSAGE_TEXT));
 }
 

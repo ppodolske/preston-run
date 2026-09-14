@@ -10,7 +10,28 @@ assert.equal(out.gmail_message_id,'msg1');assert.equal(out.gmail_thread_id,'thr1
 
 const enc=s=>Buffer.from(s).toString('base64url');
 assert.equal(extractGmailMessageText({snippet:'fallback',payload:{mimeType:'text/plain',body:{data:enc('Hello plain body')}}}),'Hello plain body');
-assert.equal(extractGmailMessageText({snippet:'fallback',payload:{mimeType:'multipart/mixed',parts:[{mimeType:'multipart/alternative',parts:[{mimeType:'text/html',body:{data:enc('<p>HTML first</p>')}},{mimeType:'text/plain',body:{data:enc('Nested plain wins')}}]},{mimeType:'application/pdf',filename:'ticket.pdf',body:{data:enc('SECRET PDF BYTES')}}]}}),'Nested plain wins');
+const multipart=extractGmailMessageText({snippet:'fallback',payload:{mimeType:'multipart/mixed',parts:[{mimeType:'multipart/alternative',parts:[{mimeType:'text/html',body:{data:enc('<p>HTML first</p>')}},{mimeType:'text/plain',body:{data:enc('Nested plain wins')}}]},{mimeType:'application/pdf',filename:'ticket.pdf',body:{data:enc('SECRET PDF BYTES')}}]}});
+assert.match(multipart,/Nested plain wins/,'plain-text evidence must be retained');
+assert.match(multipart,/HTML first/,'complementary sanitized HTML evidence must also be retained');
+assert.doesNotMatch(multipart,/SECRET PDF BYTES/,'attachment bytes must remain excluded');
+
+const jetstarMultipart=extractGmailMessageText({
+  snippet:'Booking reference: QNRY8J. Your itinerary is on its way.',
+  payload:{mimeType:'multipart/alternative',parts:[
+    {mimeType:'text/plain',body:{data:enc('Manage booking: https://booking.jetstar.com/mmb')}},
+    {mimeType:'text/html',body:{data:enc('<html><style>.x{display:none}</style><p>Booking reference: <strong>QNRY8J</strong></p><p>Manage booking: https://booking.jetstar.com/mmb</p></html>')}}
+  ]}
+});
+assert.match(jetstarMultipart,/QNRY8J/,'booking reference present only in the richer HTML alternative must survive normalization');
+assert.match(jetstarMultipart,/https:\/\/booking\.jetstar\.com\/mmb/);
+assert.doesNotMatch(jetstarMultipart,/display:none/,'HTML style content must remain stripped');
+
+const duplicateAlternative=extractGmailMessageText({payload:{mimeType:'multipart/alternative',parts:[
+  {mimeType:'text/plain',body:{data:enc('Same booking evidence')}},
+  {mimeType:'text/html',body:{data:enc('<p>Same booking evidence</p>')}}
+]}});
+assert.equal(duplicateAlternative,'Same booking evidence','equivalent plain and HTML alternatives should not duplicate exact evidence');
+
 const htmlOnly=extractGmailMessageText({snippet:'fallback',payload:{mimeType:'text/html',body:{data:enc('<html><style>.x{}</style><script>alert(1)</script><p>Booking <b>confirmed</b>&nbsp;today</p></html>')}}});
 assert.equal(htmlOnly,'Booking confirmed today');assert.doesNotMatch(htmlOnly,/alert|\.x/);
 const padded=Buffer.from('Padding works').toString('base64').replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
