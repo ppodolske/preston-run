@@ -61,7 +61,11 @@ function htmlToPlainText(value){
 }
 
 function normalizeEvidenceText(value){
-  return String(value||'').replace(/\u0000/g,' ').replace(/[\t\r\n ]+/g,' ').trim();
+  return String(value||'')
+    .replace(/\u0000/g,' ')
+    .replace(/[\t\r\n ]+/g,' ')
+    .replace(/(\b\d{1,2}:\d{2}(?:am|pm)\s*\/\s*\d{1,2}:\d{2})\s+Flight\s+number\s+(JQ\d{2,4}\b)/gi,'$1 $2')
+    .trim();
 }
 function uniqueEvidence(values){
   const seen=new Set(),out=[];
