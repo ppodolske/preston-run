@@ -11,12 +11,20 @@ function emptyResult(total=0){
 }
 
 const defaultSleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+function gmailErrorReasons(error){
+  const detail=error&&error.body&&error.body.error||{};
+  if(!Array.isArray(detail.errors))return [];
+  return detail.errors.map(item=>String(item&&item.reason||'')).filter(Boolean);
+}
 function isRetryableGmailError(error){
   const status=Number(error&&error.status||0);
-  return status===429||status>=500;
+  if(status===429||status>=500)return true;
+  if(status!==403)return false;
+  const reasons=new Set(gmailErrorReasons(error));
+  return reasons.has('rateLimitExceeded')||reasons.has('userRateLimitExceeded')||reasons.has('quotaExceeded');
 }
 
-async function getMessageWithRetry(provider,messageId,{retryDelaysMs=[250,500,1000,2000],sleep=defaultSleep}={}){
+async function getMessageWithRetry(provider,messageId,{retryDelaysMs=[15000,30000,60000],sleep=defaultSleep}={}){
   let retryIndex=0;
   while(true){
     try{return await provider.getMessage(messageId);}
@@ -28,7 +36,7 @@ async function getMessageWithRetry(provider,messageId,{retryDelaysMs=[250,500,10
   }
 }
 
-async function runGmailLifeAdminBackfill({sources=[],provider,actions,isAlreadyHandled=async()=>false,classify=classifyGmailIntent,extract=extractLifeAdminCandidate,onProgress=null,retryDelaysMs=[250,500,1000,2000],interMessageDelayMs=125,sleep=defaultSleep}={}){
+async function runGmailLifeAdminBackfill({sources=[],provider,actions,isAlreadyHandled=async()=>false,classify=classifyGmailIntent,extract=extractLifeAdminCandidate,onProgress=null,retryDelaysMs=[15000,30000,60000],interMessageDelayMs=1000,sleep=defaultSleep}={}){
   if(!provider||typeof provider.getMessage!=='function')throw new Error('Gmail provider is required');
   if(!actions||typeof actions.createLifeAdminItem!=='function'||typeof actions.createReviewItem!=='function')throw new Error('Life Admin actions are required');
   const result=emptyResult(sources.length);
@@ -75,4 +83,4 @@ async function runGmailLifeAdminBackfill({sources=[],provider,actions,isAlreadyH
   return result;
 }
 
-module.exports={TARGET_SCAN_IDS,runGmailLifeAdminBackfill,emptyResult,isRetryableGmailError,getMessageWithRetry};
+module.exports={TARGET_SCAN_IDS,runGmailLifeAdminBackfill,emptyResult,gmailErrorReasons,isRetryableGmailError,getMessageWithRetry};
