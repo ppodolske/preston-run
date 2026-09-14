@@ -11,9 +11,11 @@
     "job:reminders:morning": "node src/jobs/reminders.js morning",
     "job:reminders:noon": "node src/jobs/reminders.js noon",
     "job:reminders:evening": "node src/jobs/reminders.js evening",
+    "job:reminders:night": "node src/jobs/reminders.js night",
     "job:calendars:sync": "node src/jobs/calendar-sync.js",
     "job:fitness:sync": "node src/jobs/fitness-context-sync.js",
     "job:gmail:scan": "node src/jobs/gmail-manual-scan.js",
+    "job:gmail:scheduled": "node src/jobs/gmail-scheduled-sync.js",
     "job:gmail:life-admin-backfill": "node src/jobs/gmail-life-admin-backfill.js",
     "job:gmail:trip-reconstruction": "node src/jobs/gmail-trip-reconstruction.js",
     "job:gmail:booking-enrichment": "node src/jobs/gmail-booking-enrichment.js"
