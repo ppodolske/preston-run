@@ -1,6 +1,7 @@
 'use strict';
 const assert=require('node:assert/strict');
-const {extractBookingCandidate,jetstarDiagnostics}=require('../src/domain/gmail-booking-extractor');
+const {extractBookingCandidate}=require('../src/domain/gmail-booking-extractor');
+const {jetstarDiagnostics}=require('../src/domain/gmail-jetstar-diagnostics');
 
 const text=`Booking reference
 QNRY8J
