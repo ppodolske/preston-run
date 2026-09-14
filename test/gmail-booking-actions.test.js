@@ -46,6 +46,13 @@ const facts=[{fact_type:'booking.identity'}];
   assert.equal(update[2].title,'Automated new title','service supplies extracted fields; data layer enforces manual_fields');
   assert.deepEqual(h.calls.find(c=>c[0]==='linkSource').slice(1),['b-existing','src2']);
 
+  const richExisting={id:'b-rich',trip_id:'trip-rich',provider:'Jetstar',confirmation_reference:'QNRY8J',status:'confirmed',title:'Sydney → Queenstown flights',starts_at:'2026-08-15T00:00:00Z',ends_at:'2026-08-22T00:00:00Z',location:'Queenstown',origin:'Sydney',destination:'Queenstown',booking_url:'https://www.jetstar.com/manage/QNRY8J',source_metadata:{source:'gmail',manual_fields:[]}};
+  h=harness({existing:richExisting,decision:{kind:'link',tripId:'trip-rich',score:90,reasons:['date_overlap','geography_match'],proposedTrip:null}});
+  const sparse={booking_type:'flight',provider:'Jetstar',confirmation_reference:'QNRY8J',title:'Jetstar flight itinerary',status:'confirmed',starts_at:null,ends_at:null,time_zone:'Australia/Sydney',location:null,origin:null,destination:null,booking_url:null,geography:{label:null,city:null,region:null,country:null},confidence:0.84,evidence:['provider:jetstar','reference:explicit']};
+  await h.actions.processBooking({source:{...source,id:'src-sparse'},candidate:sparse,facts,trips:[{id:'trip-rich'}]});
+  const sparsePatch=h.calls.find(c=>c[0]==='updateBooking')[2];
+  for(const field of ['trip_id','starts_at','ends_at','location','origin','destination','booking_url'])assert.equal(Object.hasOwn(sparsePatch,field),false,`sparse follow-up must not clear ${field}`);
+
   h=harness({existing,decision:{kind:'link',tripId:'trip1',score:90,reasons:['date_overlap','geography_match'],proposedTrip:null}});
   await h.actions.processBooking({source,candidate,facts,trips:[{id:'trip1'}]});
   const linkUpdate=h.calls.filter(c=>c[0]==='updateBooking').at(-1);
