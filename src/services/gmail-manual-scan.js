@@ -19,7 +19,7 @@ async function startManualGmailScan(supabase,userId,config,options={}){
   const provider=(options.createGmailProvider||createGmailProvider)({fetch:options.fetch||global.fetch,accessToken}),existingTrips=await(options.listTrips||listTrips)(supabase,{id:userId}),persistence=options.persistence||createGmailPersistenceAdapters({supabase,userId,connection});
   const lifeAdminActions=options.lifeAdminActions||buildGmailLifeAdminActions({supabase,userId,lifeAdminData:options.lifeAdminData,gmailData:options.gmailData||{recordGmailActivity},reviewData:options.reviewLinkData});
   const bookingReviewData=options.bookingReviewData||{createReviewItem:async(source,decision)=>lifeAdminActions.createReviewItem(source,{reason:decision.reasons&&decision.reasons[0]||'confirm_match'})};
-  const bookingActions=options.bookingActions||buildGmailBookingActions({supabase,userId,bookingData:options.bookingData,bookingSourceData:options.bookingSourceData,tripData:options.tripData,gmailData:options.gmailData||{recordGmailActivity},reviewData:bookingReviewData});
+  const bookingActions=options.bookingActions||buildGmailBookingActions({supabase,userId,bookingData:options.bookingData,bookingSourceData:options.bookingSourceData,bookingLegData:options.bookingLegData,tripData:options.tripData,gmailData:options.gmailData||{recordGmailActivity},reviewData:bookingReviewData});
   return(options.runGmailScan||runGmailScan)({supabase,userId,connection,provider,config:config.gmail,existingTrips,persistence,bookingActions,lifeAdminActions,pdfParse:options.pdfParse});
 }
 function createGmailManualScanDeps(config,options={}){return{startScanNow(supabase,userId){return startManualGmailScan(supabase,userId,config,options);}};}
