@@ -10,6 +10,16 @@ assert.throws(()=>validateLifeItemInput({title:'x',priority:'critical'}), /Prior
 assert.throws(()=>validateTaskInput({title:'x',status:'upcoming'}), /Status/);
 const item=validateLifeItemInput({title:'  Licence renewal ',category:'renewal',status:'upcoming',due_at:'2026-10-01',priority:'high',notes:'  do this ',linked_person_id:''});
 assert.equal(item.title,'Licence renewal');assert.equal(item.due_at,'2026-10-01T00:00:00.000Z');assert.equal(item.linked_person_id,null);assert.equal(item.notes,'do this');
+const event=validateLifeItemInput({title:'Dinner',category:'event',status:'upcoming',starts_at:'2026-12-12T18:00',ends_at:'2026-12-12T20:00',time_zone:'Australia/Sydney',location:'Circular Quay',provider:'Cafe Sydney',confirmation_reference:'ABC123',booking_url:'https://example.com/reservation',linked_trip_id:'trip1',priority:'normal'});
+assert.equal(event.starts_at,'2026-12-12T07:00:00.000Z');
+assert.equal(event.ends_at,'2026-12-12T09:00:00.000Z');
+assert.equal(event.time_zone,'Australia/Sydney');
+assert.equal(event.location,'Circular Quay');
+assert.equal(event.provider,'Cafe Sydney');
+assert.equal(event.confirmation_reference,'ABC123');
+assert.equal(event.booking_url,'https://example.com/reservation');
+assert.equal(event.linked_trip_id,'trip1');
+assert.throws(()=>validateLifeItemInput({title:'Bad event',category:'event',status:'upcoming',starts_at:'2026-12-12T20:00',ends_at:'2026-12-12T18:00',time_zone:'Australia/Sydney'}),/end/i);
 const task=validateTaskInput({title:'Renew licence',status:'open',due_at:'2026-09-10',priority:'urgent',linked_trip_id:'trip1'});assert.equal(task.priority,'urgent');assert.equal(task.linked_trip_id,'trip1');
 const emptyTrip=validateTaskInput({title:'No trip',status:'open',priority:'normal',linked_trip_id:''});assert.equal(emptyTrip.linked_trip_id,null);
 const now=new Date('2026-09-13T00:00:00Z');

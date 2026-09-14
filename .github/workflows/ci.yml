@@ -37,3 +37,9 @@ jobs:
       - run: node --check src/domain/calendars.js
       - run: node --check src/jobs/reminders.js
       - run: node --check src/jobs/calendar-sync.js
+      - run: node --check src/routes/bookings.js
+      - run: node --check src/domain/gmail-booking-extractor.js
+      - run: node --check src/domain/trip-linker.js
+      - run: node --check src/services/gmail-booking-actions.js
+      - run: node --check src/services/gmail-trip-reconstruction.js
+      - run: node --check src/jobs/gmail-trip-reconstruction.js

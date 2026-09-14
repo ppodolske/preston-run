@@ -1,3 +1,5 @@
+const MAX_GMAIL_MESSAGE_TEXT=120000;
+
 function headerValue(message,name){
   const headers=message?.payload?.headers||[];
   const found=headers.find(h=>String(h.name||'').toLowerCase()===name.toLowerCase());
@@ -12,6 +14,63 @@ function receivedAt(message){
 
 function sourceLink(accountEmail,messageId){
   return `https://mail.google.com/mail/u/${encodeURIComponent(accountEmail)}/#all/${encodeURIComponent(messageId)}`;
+}
+
+function decodeBase64UrlText(value){
+  const text=String(value||'').trim();
+  if(!text)return '';
+  const normalized=text.replace(/-/g,'+').replace(/_/g,'/');
+  const padded=normalized+'='.repeat((4-normalized.length%4)%4);
+  try{return Buffer.from(padded,'base64').toString('utf8');}catch{return '';}
+}
+
+function isAttachmentPart(part){
+  if(String(part?.filename||'').trim())return true;
+  const headers=part?.headers||[];
+  const disposition=headers.find(h=>String(h.name||'').toLowerCase()==='content-disposition');
+  return Boolean(disposition&&/attachment/i.test(String(disposition.value||'')));
+}
+
+function collectBodyParts(part,plain=[],html=[]){
+  if(!part||isAttachmentPart(part))return {plain,html};
+  const mime=String(part.mimeType||'').toLowerCase();
+  const data=part.body&&part.body.data;
+  if(data&&mime==='text/plain')plain.push(decodeBase64UrlText(data));
+  else if(data&&mime==='text/html')html.push(decodeBase64UrlText(data));
+  for(const child of part.parts||[])collectBodyParts(child,plain,html);
+  return {plain,html};
+}
+
+function decodeHtmlEntity(entity){
+  const named={nbsp:' ',amp:'&',lt:'<',gt:'>',quot:'"',apos:"'",'#39':"'"};
+  const key=String(entity||'').toLowerCase();
+  if(Object.hasOwn(named,key))return named[key];
+  if(/^#x[0-9a-f]+$/i.test(key))return String.fromCodePoint(parseInt(key.slice(2),16));
+  if(/^#\d+$/.test(key))return String.fromCodePoint(parseInt(key.slice(1),10));
+  return `&${entity};`;
+}
+
+function htmlToPlainText(value){
+  return String(value||'')
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,' ')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi,' ')
+    .replace(/<br\s*\/?>/gi,'\n')
+    .replace(/<\/p\s*>/gi,'\n')
+    .replace(/<[^>]+>/g,' ')
+    .replace(/&([^;\s]{1,16});/g,(_m,entity)=>decodeHtmlEntity(entity));
+}
+
+function normalizeEvidenceText(value){
+  return String(value||'').replace(/\u0000/g,' ').replace(/[\t\r\n ]+/g,' ').trim();
+}
+
+function extractGmailMessageText(message,{maxLength=MAX_GMAIL_MESSAGE_TEXT}={}){
+  const {plain,html}=collectBodyParts(message?.payload||{});
+  const plainText=normalizeEvidenceText(plain.filter(Boolean).join('\n'));
+  const htmlText=plainText?'':normalizeEvidenceText(html.filter(Boolean).map(htmlToPlainText).join('\n'));
+  const fallback=normalizeEvidenceText(message?.snippet||'');
+  const selected=plainText||htmlText||fallback;
+  return selected.slice(0,Math.max(0,Number(maxLength)||MAX_GMAIL_MESSAGE_TEXT));
 }
 
 function classifyGmailSourceHint(normalized){
@@ -39,4 +98,4 @@ function normalizeGmailMessage(message,accountEmail,scannerVersion){
   return row;
 }
 
-module.exports={normalizeGmailMessage,classifyGmailSourceHint,headerValue,sourceLink};
+module.exports={normalizeGmailMessage,classifyGmailSourceHint,headerValue,sourceLink,extractGmailMessageText,decodeBase64UrlText,htmlToPlainText,MAX_GMAIL_MESSAGE_TEXT};

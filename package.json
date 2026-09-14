@@ -1,6 +1,6 @@
 {
   "name": "preston-run",
-  "version": "0.12.4",
+  "version": "0.13.0",
   "private": true,
   "main": "server.js",
   "scripts": {
@@ -13,7 +13,8 @@
     "job:reminders:evening": "node src/jobs/reminders.js evening",
     "job:calendars:sync": "node src/jobs/calendar-sync.js",
     "job:fitness:sync": "node src/jobs/fitness-context-sync.js",
-    "job:gmail:life-admin-backfill": "node src/jobs/gmail-life-admin-backfill.js"
+    "job:gmail:life-admin-backfill": "node src/jobs/gmail-life-admin-backfill.js",
+    "job:gmail:trip-reconstruction": "node src/jobs/gmail-trip-reconstruction.js"
   },
   "dependencies": {
     "@supabase/ssr": "0.10.3",

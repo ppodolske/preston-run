@@ -1,5 +1,5 @@
 const assert=require('node:assert/strict');
-const {ensureGmailLifeItem,gmailSourceMetadata}=require('../src/data/life-admin');
+const {ensureGmailLifeItem,gmailSourceMetadata,updateLifeItemFromGmail}=require('../src/data/life-admin');
 
 function fakeSupabase(){
   const rows=[];
@@ -8,7 +8,7 @@ function fakeSupabase(){
     from(table){
       assert.equal(table,'life_items');
       const filters=[];
-      let insertRow=null;
+      let insertRow=null,updateRow=null;
       const chain={
         select(){return chain;},
         eq(key,value){filters.push([key,value]);return chain;},
@@ -20,9 +20,11 @@ function fakeSupabase(){
             if(match)return row.source_metadata&&row.source_metadata[match[1]]===value;
             return row[key]===value;
           }));
+          if(found&&updateRow)Object.assign(found,updateRow);
           return Promise.resolve({data:found||null,error:null});
         },
         insert(row){insertRow=row;return chain;},
+        update(row){updateRow=row;return chain;},
         single(){
           const saved={id:`life${rows.length+1}`,...insertRow};
           rows.push(saved);
@@ -52,5 +54,28 @@ function fakeSupabase(){
   assert.equal(third.created,true);
   assert.equal(third.item.id,'life2');
   assert.equal(db.rows.length,2);
+
+  db.rows[0].title='My manual event title';
+  db.rows[0].linked_trip_id='trip-manual';
+  db.rows[0].location=null;
+  db.rows[0].provider=null;
+  db.rows[0].source_metadata={...db.rows[0].source_metadata,manual_fields:['title','linked_trip_id']};
+  const enriched=await updateLifeItemFromGmail(db,user,'life1',{
+    title:'Yonder reservation',
+    linked_trip_id:'trip-automatic',
+    location:'14 Church Street, Queenstown, Otago 9300, New Zealand',
+    provider:'Yonder',
+    confirmation_reference:'95640384'
+  },{source_record_id:'src-followup',gmail_message_id:'m-followup',gmail_thread_id:'thread1'});
+  assert.equal(enriched.title,'My manual event title','Gmail must not overwrite manually owned title');
+  assert.equal(enriched.linked_trip_id,'trip-manual','Gmail must not replace manually linked trip');
+  assert.equal(enriched.location,'14 Church Street, Queenstown, Otago 9300, New Zealand');
+  assert.equal(enriched.provider,'Yonder');
+  assert.equal(enriched.confirmation_reference,'95640384');
+  assert.deepEqual(enriched.source_metadata.manual_fields,['title','linked_trip_id']);
+  assert.equal(enriched.source_metadata.gmail_message_id,'m-followup');
+  assert.equal(enriched.source_metadata.gmail_thread_id,'thread1');
+  assert.equal(db.rows.length,2,'Gmail enrichment must update the existing canonical item rather than insert a duplicate');
+
   console.log('gmail Life Admin data idempotency tests passed');
 })().catch(error=>{console.error(error);process.exit(1);});

@@ -1,3 +1,5 @@
+const {isValidTimeZone,localDateTimeToUtc}=require('./date-time');
+
 const LIFE_CATEGORIES = ['renewal','deadline','bill','appointment','government','property','subscription','membership','event','other'];
 const LIFE_STATUSES = ['upcoming','needs_action','waiting','completed','ignored'];
 const TASK_STATUSES = ['open','in_progress','waiting','completed','ignored'];
@@ -21,7 +23,37 @@ function parseLocalDateInput(value) {
   if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) throw new Error('Date is invalid');
   return date.toISOString();
 }
-function validateLifeItemInput(input = {}) { return { title:requiredText(input.title,'Title'), category:oneOf(input.category,LIFE_CATEGORIES,'Category','other'), status:oneOf(input.status,LIFE_STATUSES,'Status','upcoming'), due_at:parseLocalDateInput(input.due_at), starts_at:parseLocalDateInput(input.starts_at), recurrence_rule:optionalText(input.recurrence_rule), priority:oneOf(input.priority,PRIORITIES,'Priority','normal'), notes:optionalText(input.notes), linked_person_id:optionalText(input.linked_person_id) }; }
+function parseLifeDateTime(value,zone){
+  const text=String(value ?? '').trim();
+  if(!text)return null;
+  if(/^\d{4}-\d{2}-\d{2}$/.test(text))return parseLocalDateInput(text);
+  return localDateTimeToUtc(text,zone);
+}
+function validateLifeItemInput(input = {}) {
+  const zone=String(input.time_zone||'Australia/Sydney').trim();
+  if(!isValidTimeZone(zone))throw new Error('Time zone is invalid');
+  const starts=parseLifeDateTime(input.starts_at,zone);
+  const ends=parseLifeDateTime(input.ends_at,zone);
+  if(starts&&ends&&new Date(ends)<new Date(starts))throw new Error('End time cannot be before start time');
+  return {
+    title:requiredText(input.title,'Title'),
+    category:oneOf(input.category,LIFE_CATEGORIES,'Category','other'),
+    status:oneOf(input.status,LIFE_STATUSES,'Status','upcoming'),
+    due_at:parseLocalDateInput(input.due_at),
+    starts_at:starts,
+    ends_at:ends,
+    time_zone:zone,
+    recurrence_rule:optionalText(input.recurrence_rule),
+    priority:oneOf(input.priority,PRIORITIES,'Priority','normal'),
+    notes:optionalText(input.notes),
+    linked_person_id:optionalText(input.linked_person_id),
+    linked_trip_id:optionalText(input.linked_trip_id),
+    location:optionalText(input.location),
+    provider:optionalText(input.provider),
+    confirmation_reference:optionalText(input.confirmation_reference),
+    booking_url:optionalText(input.booking_url)
+  };
+}
 function validateTaskInput(input = {}) { return { title:requiredText(input.title,'Title'), status:oneOf(input.status,TASK_STATUSES,'Status','open'), due_at:parseLocalDateInput(input.due_at), priority:oneOf(input.priority,PRIORITIES,'Priority','normal'), linked_life_item_id:optionalText(input.linked_life_item_id), linked_person_id:optionalText(input.linked_person_id), linked_trip_id:optionalText(input.linked_trip_id), notes:optionalText(input.notes) }; }
 function activeStatus(status) { return status !== 'completed' && status !== 'ignored'; }
 function dateKeyInTimeZone(value, timeZone='Australia/Sydney') { const parts=new Intl.DateTimeFormat('en-AU',{timeZone,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(value));const map=Object.fromEntries(parts.map(p=>[p.type,p.value]));return `${map.year}-${map.month}-${map.day}`; }
