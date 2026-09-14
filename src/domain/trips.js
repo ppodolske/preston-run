@@ -100,9 +100,10 @@ function validateBookingInput(input = {}) {
   };
 }
 
-function buildItinerary({ segments = [], bookings = [] } = {}) {
+function buildItinerary({ segments = [], bookings = [], events = [] } = {}) {
   const linkedSegmentIds = new Set(bookings.map(b => b.segment_id).filter(Boolean));
   const entries = bookings.map(record => ({type:'booking',record}));
+  for (const record of events) entries.push({type:'event',record});
   for (const record of segments) if (!linkedSegmentIds.has(record.id)) entries.push({type:'segment',record});
   return entries.sort((a,b) => {
     const ad = a.record.starts_at ? new Date(a.record.starts_at).getTime() : Infinity;
