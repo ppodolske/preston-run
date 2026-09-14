@@ -13,10 +13,15 @@ const {buildGmailLifeAdminActions}=require('../services/gmail-life-admin-actions
 const {runGmailTripReconstruction,EXPECTED_LEGACY_SHELL_COUNT}=require('../services/gmail-trip-reconstruction');
 
 const APPLY_CONFIRMATION='gmail-trip-reconstruction-v0.13.0-apply';
-function parseMode(argv=process.argv.slice(2)){
+function parseMode(argv=process.argv.slice(2),env=process.env){
   const known=new Set(['--dry-run','--apply']);for(const arg of argv)if(!known.has(arg))throw new Error(`Unknown reconstruction argument: ${arg}`);
   if(argv.includes('--dry-run')&&argv.includes('--apply'))throw new Error('Choose either --dry-run or --apply, not both');
-  return argv.includes('--apply')?'apply':'dry-run';
+  if(argv.includes('--apply'))return'apply';
+  if(argv.includes('--dry-run'))return'dry-run';
+  const configured=String(env.GMAIL_TRIP_RECONSTRUCTION_MODE||'').trim().toLowerCase();
+  if(!configured||configured==='dry-run')return'dry-run';
+  if(configured==='apply')return'apply';
+  throw new Error('GMAIL_TRIP_RECONSTRUCTION_MODE must be dry-run or apply');
 }
 function assertApplyConfirmation(mode,env=process.env){if(mode==='apply'&&String(env.GMAIL_TRIP_RECONSTRUCTION_CONFIRM||'')!==APPLY_CONFIRMATION)throw new Error(`Apply confirmation is required: ${APPLY_CONFIRMATION}`);}
 function throwIfError(result){if(result&&result.error)throw result.error;return result&&result.data||[];}
@@ -52,7 +57,7 @@ async function createProvider({supabase,userId,connection,env=process.env,fetchI
 }
 
 async function main({argv=process.argv.slice(2),env=process.env,fetchImpl=global.fetch}={}){
-  const mode=parseMode(argv);assertApplyConfirmation(mode,env);
+  const mode=parseMode(argv,env);assertApplyConfirmation(mode,env);
   const supabase=createBackgroundSupabaseClient({supabaseUrl:env.SUPABASE_URL,serviceRoleKey:env.SUPABASE_SERVICE_ROLE_KEY}),userId=await resolveOwnerUserId(supabase,env.OWNER_GOOGLE_EMAIL),connection=await getGmailConnection(supabase,userId);
   if(!connection||connection.status==='disconnected')throw new Error('No connected Gmail account');if(!connection.access_token_ciphertext&&!connection.refresh_token_ciphertext)throw new Error('Connected Gmail account is missing access token');
   const provider=await createProvider({supabase,userId,connection,env,fetchImpl}),data=createReconstructionData({supabase,userId});
