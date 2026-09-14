@@ -36,7 +36,7 @@ for(const pattern of [
   /create index booking_source_links_user_source_idx/i,
   /create index booking_source_links_user_booking_idx/i,
   /alter table public\.booking_source_links enable row level security/i,
-  /to authenticated using \(\(select auth\.uid\(\)\) = user_id\)/i,
+  /to authenticated[\s\S]*using \(\(select auth\.uid\(\)\) = user_id\)/i,
   /revoke all on public\.booking_source_links from anon/i,
   /grant select, insert, update, delete on public\.booking_source_links to authenticated/i
 ]) assert.match(sql,pattern);
