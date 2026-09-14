@@ -13,6 +13,7 @@ const RESTAURANT_CONTENT=/\b(reservation at|dinner reservation|lunch reservation
 const RESTAURANT_SENDER=/\b(sevenrooms|nowbookit|opentable|resy)\b/i;
 const STRONG_TRAVEL_CONTENT=/\b(flight|airline|e-?ticket|itinerary|boarding pass|check-?in|qantas|virgin australia|jetstar|emirates|singapore airlines|cathay|air new zealand|hotel|accommodation|airbnb|booking\.com|hertz|avis|europcar|budget car|car hire|rental car|vehicle rental|ferry|searoad|cruise|train ticket|rail journey|tour booking)\b/i;
 const STRONG_TRAVEL_SENDER=/\b(qantas|virginaustralia|virgin australia|jetstar|emirates|singaporeair|singapore airlines|cathay|airnewzealand|air new zealand|airbnb|booking\.com|hertz|avis|europcar|searoad|ferry|cruise)\b/i;
+const TRAVEL_TRANSACTIONAL=/\b(booking confirmation|booking (?:reference|ref)|reservation(?: reminder| confirmed)?|confirmation(?: number| reference)?|flight itinerary|itinerary issue date|e-?ticket|boarding pass|check-?in|vehicle has been reserved|your vehicle has been reserved|rental reservation|upcoming trip)\b/i;
 const MEMBERSHIP=/\bmembership\b/i;
 const MEMBERSHIP_ACTION=/\b(renew|renewal|expires?|expiring|due)\b/i;
 const COMPLETED_MEMBERSHIP=/\b(thank you|thanks|renewed|renewing|cancellation request outcome|cancelled|canceled)\b/i;
@@ -31,6 +32,9 @@ function classifyGmailIntent(envelope={}){
   const sender=senderText(envelope);
   if(!content&&!sender)return {intent:'ignore',confidence:0.99,reason:'no_content'};
 
+  if(has(sender,STRONG_TRAVEL_SENDER)&&has(content,TRAVEL_TRANSACTIONAL)){
+    return {intent:'trip',confidence:0.95,reason:'strong_travel_signal'};
+  }
   if(has(content,MARKETING))return {intent:'ignore',confidence:0.99,reason:'marketing'};
   if(has(content,APPOINTMENT)||(has(content,BOOKING_CONFIRMATION)&&has(content,HEALTH_KIND))){
     return {intent:'life_admin',category:'appointment',confidence:0.95,reason:'health_appointment'};
