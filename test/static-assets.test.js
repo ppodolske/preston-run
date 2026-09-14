@@ -37,3 +37,11 @@ for (const [pathname, contentType] of [
     assert.ok(res.body.length > 0);
   });
 }
+
+test('/preston.css gives travel badges visible separation from titles', () => {
+  const res = response();
+  const handled = serveStatic({ url: '/preston.css' }, res, '/preston.css');
+  assert.equal(handled, true);
+  const css = res.body.toString('utf8');
+  assert.match(css, /\.travel-badge\{[^}]*display:inline-flex[^}]*margin-right:8px[^}]*\}/);
+});
