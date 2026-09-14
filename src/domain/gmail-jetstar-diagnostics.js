@@ -6,6 +6,10 @@ const JETSTAR_SERVICE_PATTERN=/\bJQ\d{2,4}\b/gi;
 const JETSTAR_DATE_TIME_PAIR_PATTERN=/\b(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4}\s+\d{1,2}:\d{2}(?:am|pm)\s*\/\s*\d{1,2}:\d{2}\b/gi;
 const JETSTAR_TIME_SERVICE_PATTERN=/\b\d{1,2}:\d{2}(?:am|pm)\s*\/\s*\d{1,2}:\d{2}\s+JQ\d{2,4}\b/gi;
 const JETSTAR_ROW_PATTERN=/\b(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})\s+(\d{1,2}:\d{2}(?:am|pm))(?:\s*\/\s*\d{1,2}:\d{2})?\s+(JQ\d{2,4})\b/gi;
+const JETSTAR_RELAXED_ROW_PATTERN=/\b(?:Mon(?:day)?|Tue(?:sday)?|Wed(?:nesday)?|Thu(?:rsday)?|Fri(?:day)?|Sat(?:urday)?|Sun(?:day)?)\s*,?\s*(\d{1,2})\s+(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{4})\s+(\d{1,2}:\d{2})\s*(am|pm)(?:\s*\/\s*\d{1,2}:\d{2}(?:\s*(?:am|pm))?)?\s+(JQ\d{2,4})\b/gi;
+const JETSTAR_DATE_PATTERN=/\b(?:Mon(?:day)?|Tue(?:sday)?|Wed(?:nesday)?|Thu(?:rsday)?|Fri(?:day)?|Sat(?:urday)?|Sun(?:day)?)\s*,?\s*\d{1,2}\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{4}\b/gi;
+const COMPACT_MERIDIEM_PATTERN=/\b\d{1,2}:\d{2}(?:am|pm)\b/gi;
+const SPACED_MERIDIEM_PATTERN=/\b\d{1,2}:\d{2}\s+(?:am|pm)\b/gi;
 const JETSTAR_ROUTE_PATTERN=/Flight\s*#(\d+)\s*:\s*([A-Za-z][A-Za-z .'-]*?)(?:\s*\([^)]*\))?\s*>\s*([A-Za-z][A-Za-z .'-]*?)(?:\s*\([^)]*\))?(?=\s+Flight\s*#\d+\s*:|\s+Jetstar\b|\s+International\b|\s+Baggage\s+Information\b|$)/gi;
 
 function matches(value,pattern){return [...String(value||'').matchAll(new RegExp(pattern.source,pattern.flags))];}
@@ -43,6 +47,10 @@ function jetstarDiagnostics(text,{maxLength=null}={}){
     hasFlight2:lower.includes('flight #2'),
     hasBaggageInformation:lower.includes('baggage information'),
     flightRowCount:countMatches(value,JETSTAR_ROW_PATTERN),
+    relaxedFlightRowCount:countMatches(value,JETSTAR_RELAXED_ROW_PATTERN),
+    dateRowCount:countMatches(value,JETSTAR_DATE_PATTERN),
+    compactMeridiemCount:countMatches(value,COMPACT_MERIDIEM_PATTERN),
+    spacedMeridiemCount:countMatches(value,SPACED_MERIDIEM_PATTERN),
     routeCount:countMatches(value,JETSTAR_ROUTE_PATTERN),
     scheduleDateCount:countMatches(value,JETSTAR_SCHEDULE_DATE_PATTERN),
     timePairCount:countMatches(value,JETSTAR_TIME_PAIR_PATTERN),
@@ -65,4 +73,4 @@ function jetstarDiagnostics(text,{maxLength=null}={}){
   };
 }
 
-module.exports={JETSTAR_ROW_PATTERN,JETSTAR_ROUTE_PATTERN,jetstarDiagnostics};
+module.exports={JETSTAR_ROW_PATTERN,JETSTAR_RELAXED_ROW_PATTERN,JETSTAR_ROUTE_PATTERN,jetstarDiagnostics};
