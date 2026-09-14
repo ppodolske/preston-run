@@ -67,9 +67,9 @@ function parseBookingCom(envelope,text){
   const title=clean((String(envelope.subject||'').match(/confirmed at\s+(.+)$/i)||[])[1])||'Booking.com accommodation';
   const geoMatch=text.match(/\b(Bowral)\s*,\s*(New South Wales|NSW)\s*,\s*(Australia)\b/i);
   const mentionsBowral=/\bBowral\b/i.test(text);
-  const city=geoMatch&&geoMatch[1]||mentionsBowral?'Bowral':null;
-  const region=geoMatch&&geoMatch[2]||mentionsBowral?'NSW':null;
-  const country=geoMatch&&geoMatch[3]||mentionsBowral?'Australia':null;
+  const city=(geoMatch&&geoMatch[1])||(mentionsBowral?'Bowral':null);
+  const region=(geoMatch&&geoMatch[2])||(mentionsBowral?'NSW':null);
+  const country=(geoMatch&&geoMatch[3])||(mentionsBowral?'Australia':null);
   const dates=parseLongDates(text);
   return baseCandidate({booking_type:'accommodation',provider:'Booking.com',confirmation_reference:ref,title,status:statusFromText(text),starts_at:dates[0]||null,ends_at:dates[1]||null,location:city,booking_url:bookingUrl(text),geography:geography(city&&region?`${city}, ${region==='New South Wales'?'NSW':region}`:city,city,region,country),confidence:ref&&city&&dates[0]?0.98:0.83,evidence:['provider:booking.com',ref?'reference:explicit':null,city?'geography:parsed':null,dates.length?'dates:parsed':null].filter(Boolean)});
 }
