@@ -53,6 +53,16 @@ const facts=[{fact_type:'booking.identity'}];
   assert.ok(h.calls.some(c=>c[0]==='activity'&&c[1].entityType==='booking'&&c[1].action==='update'));
   assert.equal(h.calls.some(c=>c[0]==='activity'&&c[1].entityType==='trip'),false);
 
+  const manualTripBooking={id:'b-manual-trip',trip_id:'manual-trip',provider:'Qantas',confirmation_reference:'ECECAB',status:'confirmed',title:'My flight',source_metadata:{source:'gmail',manual_fields:['trip_id']}};
+  h=harness({existing:manualTripBooking,decision:{kind:'link',tripId:'wrong-trip',score:99,reasons:['date_overlap','geography_match'],proposedTrip:null}});
+  result=await h.actions.processBooking({source:{...source,id:'src-manual'},candidate,facts,trips:[{id:'manual-trip'},{id:'wrong-trip'}]});
+  assert.equal(result.booking.trip_id,'manual-trip');
+  assert.equal(result.linkDecision.kind,'link');
+  assert.equal(result.linkDecision.tripId,'manual-trip');
+  assert.deepEqual(result.linkDecision.reasons,['manual_trip_assignment']);
+  assert.equal(h.calls.filter(c=>c[0]==='updateBooking'&&Object.hasOwn(c[2],'trip_id')).length,1,'initial enrichment may supply trip_id but matcher must not issue a second relink update');
+  assert.equal(h.calls.some(c=>c[0]==='activity'&&c[1].fieldName==='trip_id'),false,'manual trip assignment must not log a false Gmail relink');
+
   const createDecision={kind:'create',tripId:null,score:95,reasons:['strong_accommodation'],proposedTrip:{title:'Bowral, NSW',start_date:'2026-12-20',end_date:'2026-12-22',destination_label:'Bowral, NSW',destination_city:'Bowral',destination_region:'NSW',destination_country:'Australia',status:'planning'}};
   h=harness({decision:createDecision});
   await h.actions.processBooking({source,candidate:{...candidate,booking_type:'accommodation',title:'Belle in Bowral'},facts,trips:[]});
