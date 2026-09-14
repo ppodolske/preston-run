@@ -14,6 +14,14 @@ function queueSupabase(entries){return{from(name){const next=entries.shift();ass
   const sourceLinks=builder([]),refBookings=builder([{id:'b1',provider:'Hertz',confirmation_reference:'L5920779422'}]);supabase=queueSupabase([{name:'booking_source_links',builder:sourceLinks},{name:'bookings',builder:refBookings}]);
   const match=await findCanonicalBookingForGmailCandidate(supabase,{id:'u1'},{provider:' hertz ',confirmation_reference:'l5920779422'},{id:'src2'});assert.equal(match.id,'b1');assert.ok(refBookings.calls.some(x=>x[0]==='eq'&&x[1]==='confirmation_reference'&&x[2]==='L5920779422'));
 
+  const airSourceLinks=builder([]),airBookings=builder([{id:'b-air',provider:'Airbnb',booking_type:'accommodation',starts_at:'2026-08-15T00:00:00.000Z',location:'Queenstown'}]);
+  supabase=queueSupabase([{name:'booking_source_links',builder:airSourceLinks},{name:'bookings',builder:airBookings}]);
+  const airMatch=await findCanonicalBookingForGmailCandidate(supabase,{id:'u1'},{provider:'Airbnb',booking_type:'accommodation',starts_at:'2026-08-15T00:00:00.000Z',location:'Queenstown',confirmation_reference:null},{id:'src-air-2'});
+  assert.equal(airMatch&&airMatch.id,'b-air','same provider/type/start/location must reuse one no-reference Airbnb booking');
+  assert.ok(airBookings.calls.some(x=>x[0]==='eq'&&x[1]==='booking_type'&&x[2]==='accommodation'));
+  assert.ok(airBookings.calls.some(x=>x[0]==='eq'&&x[1]==='starts_at'&&x[2]==='2026-08-15T00:00:00.000Z'));
+  assert.ok(airBookings.calls.some(x=>x[0]==='eq'&&x[1]==='location'&&x[2]==='Queenstown'));
+
   await assert.rejects(()=>linkBookingSource(supabase,null,'b1','src1'),/Authenticated user/);
   console.log('booking source data tests passed');
 })().catch(e=>{console.error(e);process.exit(1)});
