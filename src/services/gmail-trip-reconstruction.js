@@ -63,29 +63,79 @@ async function sourceEnvelope(source,provider,options={}){
   return{message,envelope:{sourceRecordId:source.id,sender:source.sender||null,subject:source.subject||null,text:combineEvidence(body,message.snippet,attachments,...pdfText)}};
 }
 function currentTripDecisionForEvent(existing,candidate,trips){if(existing&&existing.linked_trip_id)return{kind:'link',tripId:existing.linked_trip_id,score:100,reasons:['existing_trip_link'],proposedTrip:null};return proposeTripLink({subjectType:'event',subject:candidate,trips});}
+function hidden(object,key,value){Object.defineProperty(object,key,{value,writable:true,configurable:true,enumerable:false});return object;}
 
-async function reconstructSource({source,provider,data,mode,parserVersion,bookingActions,lifeAdminActions,shellIds,paceMs=1000,sleep=sleepDefault,pdfParse,extractPdfText,retryDelays}={}){
+async function parseReconstructionSource({source,provider,data,parserVersion,trips=[],paceMs=0,sleep=sleepDefault,pdfParse,extractPdfText,retryDelays}={}){
   const{envelope}=await sourceEnvelope(source,provider,{sleep,pdfParse,extractPdfText,retryDelays}),classification=classifyGmailIntent(envelope);
-  const trips=(await data.listTrips()).filter(trip=>!shellIds.has(trip.id));
   let candidateObjectType='none',candidate=null,facts=[],canonical=null,tripLinkDecision={kind:'none',tripId:null,score:0,reasons:['not_reconstructable'],proposedTrip:null};
   if(classification.intent==='trip'){
     const extracted=extractBookingCandidate(envelope,{parserVersion});candidateObjectType='booking';candidate=extracted.candidate;facts=extracted.facts||[];
     canonical=typeof data.findCanonicalBooking==='function'?await data.findCanonicalBooking(candidate,source):null;
     tripLinkDecision=proposeTripLink({subjectType:'booking',subject:{...(canonical||{}),...candidate},trips});
-    if(mode==='apply'){
-      if(!bookingActions||typeof bookingActions.processBooking!=='function')throw new Error('bookingActions.processBooking is required in apply mode');
-      const outcome=await bookingActions.processBooking({source,candidate,facts,trips});canonical=outcome&&outcome.booking||canonical;tripLinkDecision=outcome&&outcome.linkDecision||tripLinkDecision;
-    }
   }else if(classification.intent==='life_admin'&&['event','appointment'].includes(classification.category)){
     candidateObjectType='event';candidate=extractLifeAdminCandidate(envelope,classification);canonical=typeof data.findLifeItem==='function'?await data.findLifeItem(source):null;tripLinkDecision=currentTripDecisionForEvent(canonical,candidate,trips);
-    if(mode==='apply'){
-      if(!lifeAdminActions||typeof lifeAdminActions.createLifeAdminItem!=='function')throw new Error('lifeAdminActions.createLifeAdminItem is required in apply mode');
-      canonical=await lifeAdminActions.createLifeAdminItem(source,candidate,classification)||canonical;
-      if(canonical&&canonical.linked_trip_id)tripLinkDecision={kind:'link',tripId:canonical.linked_trip_id,score:tripLinkDecision.score,reasons:unique([...(tripLinkDecision.reasons||[]),'applied_trip_link']),proposedTrip:null};
-    }
-  }else if(classification.intent==='review'){candidateObjectType='review';tripLinkDecision={kind:'review',tripId:null,score:classification.confidence||0,reasons:[classification.reason||'review'],proposedTrip:null};}
+  }else if(classification.intent==='review'){
+    candidateObjectType='review';tripLinkDecision={kind:'review',tripId:null,score:classification.confidence||0,reasons:[classification.reason||'review'],proposedTrip:null};
+  }
   if(paceMs>0)await sleep(paceMs);
-  return{source,classification,candidateObjectType,candidate,facts,canonicalObjectId:canonical&&canonical.id||null,tripLinkDecision};
+  const result={source,classification,candidateObjectType,candidate,facts,canonicalObjectId:canonical&&canonical.id||null,tripLinkDecision};
+  hidden(result,'_linkSubject',candidateObjectType==='booking'?{...(canonical||{}),...(candidate||{})}:candidate||{});
+  hidden(result,'_existingLinkedTripId',canonical&&canonical.linked_trip_id||null);
+  return result;
+}
+
+function decisionForResult(result,trips){
+  if(!result)return{kind:'none',tripId:null,score:0,reasons:['missing_source_result'],proposedTrip:null};
+  if(result.candidateObjectType==='booking')return proposeTripLink({subjectType:'booking',subject:result._linkSubject||result.candidate||{},trips});
+  if(result.candidateObjectType==='event'){
+    if(result._existingLinkedTripId)return{kind:'link',tripId:result._existingLinkedTripId,score:100,reasons:['existing_trip_link'],proposedTrip:null};
+    return proposeTripLink({subjectType:'event',subject:result.candidate||{},trips});
+  }
+  return result.tripLinkDecision;
+}
+function anchorPriority(result){const reasons=result&&result.tripLinkDecision&&result.tripLinkDecision.reasons||[];if(reasons.includes('round_trip_itinerary'))return 3;if(reasons.includes('strong_accommodation'))return 2;if(reasons.includes('related_booking_cluster'))return 1;return 0;}
+function planTripAnchors(sourceIds,sourceResults,realTrips){
+  const candidates=sourceIds.map((id,index)=>({id,index,result:sourceResults.get(id)})).filter(row=>row.result&&row.result.candidateObjectType==='booking'&&row.result.tripLinkDecision&&row.result.tripLinkDecision.kind==='create'&&row.result.tripLinkDecision.proposedTrip).sort((a,b)=>anchorPriority(b.result)-anchorPriority(a.result)||Number(b.result.tripLinkDecision.score||0)-Number(a.result.tripLinkDecision.score||0)||a.index-b.index);
+  const anchorIds=[];const virtualTrips=[];
+  for(const row of candidates){
+    const existingDecision=decisionForResult(row.result,[...realTrips,...virtualTrips]);
+    if(existingDecision.kind==='link'){
+      row.result.tripLinkDecision=existingDecision;
+      continue;
+    }
+    anchorIds.push(row.id);
+    const proposed=row.result.tripLinkDecision.proposedTrip;
+    virtualTrips.push({id:`proposed:${row.id}`,...proposed,automation_managed:true});
+  }
+  const anchors=new Set(anchorIds),planningTrips=[...realTrips,...virtualTrips];
+  for(const id of sourceIds){if(anchors.has(id))continue;const result=sourceResults.get(id);if(result)result.tripLinkDecision=decisionForResult(result,planningTrips);}
+  return{anchorIds,virtualTrips};
+}
+
+async function applyParsedResult(result,{data,bookingActions,lifeAdminActions,shellIds}={}){
+  if(!result||!result.source)return result;
+  const trips=(await data.listTrips()).filter(trip=>!shellIds.has(trip.id));
+  let canonicalObjectId=result.canonicalObjectId,tripLinkDecision=result.tripLinkDecision;
+  if(result.candidateObjectType==='booking'){
+    if(!bookingActions||typeof bookingActions.processBooking!=='function')throw new Error('bookingActions.processBooking is required in apply mode');
+    const outcome=await bookingActions.processBooking({source:result.source,candidate:result.candidate,facts:result.facts||[],trips});
+    canonicalObjectId=outcome&&outcome.booking&&outcome.booking.id||canonicalObjectId;tripLinkDecision=outcome&&outcome.linkDecision||tripLinkDecision;
+  }else if(result.candidateObjectType==='event'){
+    if(!lifeAdminActions||typeof lifeAdminActions.createLifeAdminItem!=='function')throw new Error('lifeAdminActions.createLifeAdminItem is required in apply mode');
+    const canonical=await lifeAdminActions.createLifeAdminItem(result.source,result.candidate,result.classification);canonicalObjectId=canonical&&canonical.id||canonicalObjectId;
+    if(canonical&&canonical.linked_trip_id)tripLinkDecision={kind:'link',tripId:canonical.linked_trip_id,score:tripLinkDecision.score,reasons:unique([...(tripLinkDecision.reasons||[]),'applied_trip_link']),proposedTrip:null};
+    else tripLinkDecision=currentTripDecisionForEvent(canonical,result.candidate,(await data.listTrips()).filter(trip=>!shellIds.has(trip.id)));
+  }
+  const applied={...result,canonicalObjectId,tripLinkDecision};
+  hidden(applied,'_linkSubject',result._linkSubject||result.candidate||{});hidden(applied,'_existingLinkedTripId',result._existingLinkedTripId||null);
+  return applied;
+}
+
+async function reconstructSource({source,provider,data,mode,parserVersion,bookingActions,lifeAdminActions,shellIds,paceMs=1000,sleep=sleepDefault,pdfParse,extractPdfText,retryDelays}={}){
+  const trips=(await data.listTrips()).filter(trip=>!shellIds.has(trip.id));
+  let result=await parseReconstructionSource({source,provider,data,parserVersion,trips,paceMs,sleep,pdfParse,extractPdfText,retryDelays});
+  if(mode==='apply')result=await applyParsedResult(result,{data,bookingActions,lifeAdminActions,shellIds});
+  return result;
 }
 function mappingRow(shell,sourceResults){
   const results=shell.sourceRecordIds.map(id=>sourceResults.get(id)).filter(Boolean),primary=results[0]||{},candidate=primary.candidate||{};
@@ -97,13 +147,19 @@ function mappingRow(shell,sourceResults){
 
 async function runGmailTripReconstruction({mode='dry-run',expectedBaseline=EXPECTED_LEGACY_SHELL_COUNT,data,provider,parserVersion='gmail-booking-parser-v0.13.0',bookingActions,lifeAdminActions,paceMs=1000,sleep=sleepDefault,pdfParse,extractPdfText,retryDelays,onProgress}={}){
   if(!['dry-run','apply'].includes(mode))throw new Error('Reconstruction mode must be dry-run or apply');if(!provider||typeof provider.getMessage!=='function')throw new Error('Gmail provider is required');
-  const discovery=await discoverLegacyTripShells({data,expectedBaseline}),shellIds=new Set(discovery.shells.map(row=>row.trip.id)),sourceIds=unique(discovery.shells.flatMap(row=>row.sourceRecordIds)),sourceResults=new Map();let index=0;
+  const discovery=await discoverLegacyTripShells({data,expectedBaseline}),shellIds=new Set(discovery.shells.map(row=>row.trip.id)),sourceIds=unique(discovery.shells.flatMap(row=>row.sourceRecordIds)),sourceResults=new Map();
+  const realTrips=(await data.listTrips()).filter(trip=>!shellIds.has(trip.id));let index=0;
   for(const sourceId of sourceIds){
     const source=await data.getSource(sourceId);
     if(!source){sourceResults.set(sourceId,{source:null,candidateObjectType:'none',candidate:null,canonicalObjectId:null,tripLinkDecision:{kind:'review',tripId:null,score:0,reasons:['missing_source_record'],proposedTrip:null}});index+=1;continue;}
-    const result=await reconstructSource({source,provider,data,mode,parserVersion,bookingActions,lifeAdminActions,shellIds,paceMs:index===sourceIds.length-1?0:paceMs,sleep,pdfParse,extractPdfText,retryDelays});sourceResults.set(sourceId,result);index+=1;if(onProgress)await onProgress({processedSources:index,totalSources:sourceIds.length,sourceRecordId:sourceId,candidateObjectType:result.candidateObjectType});
+    const result=await parseReconstructionSource({source,provider,data,parserVersion,trips:realTrips,paceMs:index===sourceIds.length-1?0:paceMs,sleep,pdfParse,extractPdfText,retryDelays});sourceResults.set(sourceId,result);index+=1;if(onProgress)await onProgress({processedSources:index,totalSources:sourceIds.length,sourceRecordId:sourceId,candidateObjectType:result.candidateObjectType});
+  }
+  const plan=planTripAnchors(sourceIds,sourceResults,realTrips);
+  if(mode==='apply'){
+    const anchors=new Set(plan.anchorIds),applyOrder=[...plan.anchorIds,...sourceIds.filter(id=>!anchors.has(id))];
+    for(const sourceId of applyOrder){const result=sourceResults.get(sourceId);if(!result||!result.source)continue;sourceResults.set(sourceId,await applyParsedResult(result,{data,bookingActions,lifeAdminActions,shellIds}));}
   }
   const rows=discovery.shells.map(shell=>mappingRow(shell,sourceResults));return{mode,observedCount:discovery.observedCount,expectedBaseline:discovery.expectedBaseline,baselineMatches:discovery.baselineMatches,warnings:discovery.warnings,distinctSourceCount:sourceIds.length,rows};
 }
 
-module.exports={EXPECTED_LEGACY_SHELL_COUNT,LEGACY_RULE_PREFIX,isLegacyTripCreateActivity,isQuotaError,withQuotaRetry,discoverLegacyTripShells,sourceEnvelope,reconstructSource,runGmailTripReconstruction,dependencyReasons,tripChangedSinceCreate,mappingRow};
+module.exports={EXPECTED_LEGACY_SHELL_COUNT,LEGACY_RULE_PREFIX,isLegacyTripCreateActivity,isQuotaError,withQuotaRetry,discoverLegacyTripShells,sourceEnvelope,parseReconstructionSource,planTripAnchors,applyParsedResult,reconstructSource,runGmailTripReconstruction,dependencyReasons,tripChangedSinceCreate,mappingRow};
