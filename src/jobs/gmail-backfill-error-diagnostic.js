@@ -7,6 +7,14 @@ const {resolveGmailAccessToken}=require('../services/gmail-access-token');
 const {createGmailProvider}=require('../services/gmail-provider');
 const {TARGET_SCAN_IDS}=require('../services/gmail-life-admin-backfill');
 
+const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+function safeError(error){
+  const body=error&&error.body||{};
+  const detail=body&&body.error||{};
+  const reasons=Array.isArray(detail.errors)?detail.errors.map(item=>item&&item.reason).filter(Boolean):[];
+  return {status:error&&error.status||null,apiStatus:detail.status||null,reasons,message:error&&error.message||'unknown'};
+}
+
 async function main({env=process.env,fetchImpl=global.fetch}={}){
   const supabase=createBackgroundSupabaseClient({supabaseUrl:env.SUPABASE_URL,serviceRoleKey:env.SUPABASE_SERVICE_ROLE_KEY});
   const userId=await resolveOwnerUserId(supabase,env.OWNER_GOOGLE_EMAIL);
@@ -17,17 +25,17 @@ async function main({env=process.env,fetchImpl=global.fetch}={}){
   const {data,error}=await supabase.from('gmail_source_records').select('gmail_message_id,received_at').eq('user_id',userId).in('scan_run_id',TARGET_SCAN_IDS).order('received_at',{ascending:true});
   if(error)throw error;
   if((data||[]).length!==523)throw new Error(`Expected 523 sources, found ${(data||[]).length}`);
-  const indexes=[0,50,99,124,149,199,249,299,349,399,449,499,522];
-  const results=[];
-  for(const index of indexes){
-    const row=data[index];
-    try{await provider.getMessage(row.gmail_message_id);results.push({index:index+1,ok:true,status:200});}
-    catch(err){results.push({index:index+1,ok:false,status:err&&err.status||null,message:err&&err.message||'unknown'});}
+  let successes=0;
+  const failures=[];
+  for(let index=0;index<Math.min(data.length,200)&&failures.length<3;index+=1){
+    if(index>0)await sleep(125);
+    try{await provider.getMessage(data[index].gmail_message_id);successes+=1;}
+    catch(err){failures.push({index:index+1,...safeError(err)});}
   }
-  console.log('[gmail-backfill-error-diagnostic] '+JSON.stringify(results));
-  return results;
+  console.log('[gmail-backfill-error-diagnostic] '+JSON.stringify({successes,failures}));
+  return {successes,failures};
 }
 
-if(require.main===module){main().catch(error=>{console.error('[gmail-backfill-error-diagnostic] '+JSON.stringify({fatal:true,status:error&&error.status||null,message:error&&error.message||'unknown'}));process.exitCode=1;});}
+if(require.main===module){main().catch(error=>{console.error('[gmail-backfill-error-diagnostic] '+JSON.stringify({fatal:true,...safeError(error)}));process.exitCode=1;});}
 
-module.exports={main};
+module.exports={safeError,main};
