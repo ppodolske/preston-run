@@ -71,7 +71,7 @@ async function runMorningSummary({supabase,userId,now=new Date(),pushTransport,d
   const count=items.length+calendarEvents.length+(attentionNeeded?1:0)+(digest?1:0)+(gmailScan?1:0)+reviewItems.length;
   if(!count)return{sent:false,count:0};
   const key=`daily-summary:${today}`;const existing=await d.getOccurrence(supabase,userId,key);if(existing&&['sent','acknowledged'].includes(existing.status))return{sent:false,count,deduplicated:true};
-  const reminder=existing||await d.upsertOccurrence(supabase,userId,{entity_type:'summary',entity_id:today,reminder_class:'daily_summary',occurrence_key:key,target_date:today,effective_trigger_at:now.toISOString(),status:'pending',deep_link:'/',policy_source:'default'});
+  const reminder=existing||await d.upsertOccurrence(supabase,userId,{entity_type:'summary',entity_id:userId,reminder_class:'daily_summary',occurrence_key:key,target_date:today,effective_trigger_at:now.toISOString(),status:'pending',deep_link:'/',policy_source:'default'});
   const payload={title:'preston.ai morning summary',body:combinedSummaryBody(items,{events:calendarEvents,attentionNeeded},today,digest,gmailScan,reviewItems),url:'/',tag:`preston-daily-${today}`};
   const delivered=await deliver({supabase,userId,reminder,payload,pushTransport,deps:d});return{sent:delivered>0,count,deliveries:delivered};
 }
