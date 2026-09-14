@@ -33,17 +33,19 @@ async function runFitnessContextSyncJob({now=new Date(),env=process.env,deps={}}
   return{skipped:false,result};
 }
 
-async function main(){
+async function runCli({execute=runFitnessContextSyncJob,logger=console,exit=process.exit}={}){
+  let code=0;
   try{
-    const out=await runFitnessContextSyncJob();
-    if(out.skipped){console.log('Fitness context sync skipped: inactive Sydney schedule twin');return;}
-    if(out.result&&out.result.ok){console.log(`Fitness context sync complete${out.result.digestRegenerated?' with digest refresh':''}`);return;}
-    console.warn('Fitness context sync failed; retained last-good cached context and digest');
+    const out=await execute();
+    if(out.skipped)logger.log('Fitness context sync skipped: inactive Sydney schedule twin');
+    else if(out.result&&out.result.ok)logger.log(`Fitness context sync complete${out.result.digestRegenerated?' with digest refresh':''}`);
+    else logger.warn('Fitness context sync failed; retained last-good cached context and digest');
   }catch(error){
-    console.error(`Fitness context sync job failed: ${error&&error.message?error.message:'unknown error'}`);
-    process.exitCode=1;
+    logger.error(`Fitness context sync job failed: ${error&&error.message?error.message:'unknown error'}`);
+    code=1;
   }
+  exit(code);
 }
 
-if(require.main===module)main();
-module.exports={runFitnessContextSyncJob,loadFitnessBackgroundConfig,shouldRunFitnessContextSync};
+if(require.main===module)runCli();
+module.exports={runFitnessContextSyncJob,runCli,loadFitnessBackgroundConfig,shouldRunFitnessContextSync};
