@@ -10,14 +10,34 @@ function emptyResult(total=0){
   return {total,lifeAdminCreated:0,reviewCreated:0,tripSkipped:0,ignored:0,alreadyHandled:0,errors:0};
 }
 
-async function runGmailLifeAdminBackfill({sources=[],provider,actions,isAlreadyHandled=async()=>false,classify=classifyGmailIntent,extract=extractLifeAdminCandidate,onProgress=null}={}){
+const defaultSleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+function isRetryableGmailError(error){
+  const status=Number(error&&error.status||0);
+  return status===429||status>=500;
+}
+
+async function getMessageWithRetry(provider,messageId,{retryDelaysMs=[250,500,1000,2000],sleep=defaultSleep}={}){
+  let retryIndex=0;
+  while(true){
+    try{return await provider.getMessage(messageId);}
+    catch(error){
+      if(!isRetryableGmailError(error)||retryIndex>=retryDelaysMs.length)throw error;
+      await sleep(retryDelaysMs[retryIndex]);
+      retryIndex+=1;
+    }
+  }
+}
+
+async function runGmailLifeAdminBackfill({sources=[],provider,actions,isAlreadyHandled=async()=>false,classify=classifyGmailIntent,extract=extractLifeAdminCandidate,onProgress=null,retryDelaysMs=[250,500,1000,2000],interMessageDelayMs=125,sleep=defaultSleep}={}){
   if(!provider||typeof provider.getMessage!=='function')throw new Error('Gmail provider is required');
   if(!actions||typeof actions.createLifeAdminItem!=='function'||typeof actions.createReviewItem!=='function')throw new Error('Life Admin actions are required');
   const result=emptyResult(sources.length);
   let completed=0;
-  for(const storedSource of sources){
+  for(let index=0;index<sources.length;index+=1){
+    const storedSource=sources[index];
+    if(index>0&&interMessageDelayMs>0)await sleep(interMessageDelayMs);
     try{
-      const message=await provider.getMessage(storedSource.gmail_message_id);
+      const message=await getMessageWithRetry(provider,storedSource.gmail_message_id,{retryDelaysMs,sleep});
       const source={...storedSource,gmail_thread_id:storedSource.gmail_thread_id||message.threadId||null};
       const envelope={
         sender:source.sender||null,
@@ -55,4 +75,4 @@ async function runGmailLifeAdminBackfill({sources=[],provider,actions,isAlreadyH
   return result;
 }
 
-module.exports={TARGET_SCAN_IDS,runGmailLifeAdminBackfill,emptyResult};
+module.exports={TARGET_SCAN_IDS,runGmailLifeAdminBackfill,emptyResult,isRetryableGmailError,getMessageWithRetry};
