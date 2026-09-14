@@ -39,7 +39,7 @@ function parseJetstarRoute(text){
 }
 function jetstarRoutes(text){
   const value=String(text||''),routes=[];
-  for(const m of value.matchAll(/Flight\s*#(\d+)\s*:\s*([A-Za-z][A-Za-z .'-]*?)(?:\s*\([^)]*\))?\s*>\s*([A-Za-z][A-Za-z .'-]*?)(?:\s*\([^)]*\))?(?=\s+Flight\s*#\d+\s*:|\s+Jetstar\b|\s+International\b|$)/gi)){
+  for(const m of value.matchAll(/Flight\s*#(\d+)\s*:\s*([A-Za-z][A-Za-z .'-]*?)(?:\s*\([^)]*\))?\s*>\s*([A-Za-z][A-Za-z .'-]*?)(?:\s*\([^)]*\))?(?=\s+Flight\s*#\d+\s*:|\s+Jetstar\b|\s+International\b|\s+Baggage\s+Information\b|$)/gi)){
     routes[Number(m[1])-1]={origin:normalizeAirportPlace(m[2]),destination:normalizeAirportPlace(m[3])};
   }
   return routes.filter(Boolean);
