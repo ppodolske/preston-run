@@ -1,5 +1,5 @@
 const assert=require('node:assert/strict');
-const {runFitnessContextSyncJob,shouldRunFitnessContextSync}=require('../src/jobs/fitness-context-sync');
+const {runFitnessContextSyncJob,runCli,shouldRunFitnessContextSync}=require('../src/jobs/fitness-context-sync');
 
 (async()=>{
   // AEST: 07:15 Sydney = 21:15 UTC previous day.
@@ -34,6 +34,15 @@ const {runFitnessContextSyncJob,shouldRunFitnessContextSync}=require('../src/job
   assert.equal(captured.forceDigest,false);
   assert.equal(captured.now.toISOString(),'2026-09-12T21:15:00.000Z');
   assert.equal(refreshCalls,1);
+
+  const silentLogger={log(){},warn(){},error(){}};
+  let exitCode=null;
+  await runCli({execute:async()=>({skipped:false,result:{ok:true}}),logger:silentLogger,exit:code=>{exitCode=code;}});
+  assert.equal(exitCode,0);
+
+  exitCode=null;
+  await runCli({execute:async()=>{throw new Error('boom')},logger:silentLogger,exit:code=>{exitCode=code;}});
+  assert.equal(exitCode,1);
 
   console.log('fitness context job tests passed');
 })().catch(e=>{console.error(e);process.exit(1)});
